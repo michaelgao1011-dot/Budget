@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Pocket Budget</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data: https://api.twelvedata.com https://cdn.jsdelivr.net https://tessdata.projectnaptha.com; manifest-src 'self'; worker-src 'self' blob:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data: https://api.twelvedata.com https://www.alphavantage.co https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://tessdata.projectnaptha.com; manifest-src 'self'; worker-src 'self' blob:">
 <meta name="description" content="Private budgeting, spending, investments and net worth.">
 <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
@@ -98,9 +98,20 @@ nav svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8;st
 .acts{display:flex;gap:10px}.acts button{flex:1;padding:14px;border-radius:12px;border:0;background:var(--surf);color:var(--acc);font-weight:600}
 .acts .go{background:var(--acc);color:#fff}
 details summary{font-weight:600;cursor:pointer}
+.lnk{border:0;background:none;color:var(--acc);font-weight:600;padding:0;font-size:inherit}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chips button{border:0;background:var(--fill);color:var(--acc);border-radius:18px;padding:9px 13px;font-size:15px;font-weight:500;text-align:left}
+#chat{position:fixed;inset:0;z-index:12;background:var(--bg);display:none}#chat.open{display:block}
+.cp{max-width:560px;margin:0 auto;height:100%;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.ch{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:.5px solid var(--line)}.ch b{font-size:17px}
+#chatlog{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;padding:10px 14px;border-radius:18px;font-size:16px;line-height:1.4}.msg p{margin:0 0 6px}.msg p:last-child{margin:0}.msg ul,.md ul{margin:4px 0;padding-left:20px}
+.msg.user{align-self:flex-end;background:var(--acc);color:#fff;border-bottom-right-radius:6px}.msg.model{align-self:flex-start;background:var(--surf);border-bottom-left-radius:6px}
+.msg a,.src a{color:var(--acc)}.src{margin-top:8px;font-size:13px}.src summary{font-weight:500;color:var(--mute)}.src a{display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.md p{margin:0 0 8px}.cin{display:flex;gap:8px;padding:10px 16px}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}.spin svg{animation:none}}
 </style></head><body>
 <main id="app"></main>
+<div id="chat" role="dialog" aria-modal="true" aria-label="Assistant"><div class="cp"><div class="ch"><b>Assistant</b><button class="x" aria-label="Close" onclick="closeChat()">×</button></div><div id="chatlog" aria-live="polite"></div><div class="cin"><input id="cq" placeholder="Ask about money, rates or markets" autocomplete="off" aria-label="Your question"><button class="btn" style="width:auto;margin:0;padding:11px 16px" onclick="askAI()">Ask</button></div></div></div>
 <div id="sheet" role="dialog" aria-modal="true" aria-label="Add expense"><div class="panel">
 <button class="btn ghost" id="scanb" hidden onclick="$('#rf').click()" style="margin:0">Scan a receipt</button><input id="rf" type="file" accept="image/*" capture="environment" hidden><p id="sm" class="mute" style="margin:0;font-size:14px" role="status"></p>
 <label>Amount<input id="a" class="amt" inputmode="decimal" placeholder="0.00"></label>
@@ -121,20 +132,22 @@ const $=s=>document.querySelector(s);
 const p2=n=>String(n).padStart(2,"0");
 const ld=d=>d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fm=(n,c,d)=>n.toLocaleString(undefined,{style:"currency",currency:c,maximumFractionDigits:d})
+const fm=(n,c,d)=>n.toLocaleString(undefined,{style:"currency",currency:c,currencyDisplay:c=="CAD"?"narrowSymbol":"symbol",maximumFractionDigits:d})
 const m0=n=>n.toLocaleString(undefined,{style:"currency",currency:"CAD",currencyDisplay:"narrowSymbol",maximumFractionDigits:0});
-const fresh=()=>({rates:{...RATE},accts:[{id:1,name:"Checking",cur:"CAD",type:"cash",bal:0,limit:0}],tx:[],inv:[],budgets:{...BUD},alertAt:80,income:0,ret:6,contrib:0,assets:[],estM:0,estW:0,hist:[],ver:2,ratesAt:"2026-09-16"});
+const fresh=()=>({rates:{...RATE},accts:[{id:1,name:"Checking",cur:"CAD",type:"cash",bal:0,limit:0}],tx:[],inv:[],budgets:{...BUD},alertAt:80,income:0,ret:6,contrib:0,assets:[],estM:0,estW:0,hist:[],ver:3,ratesAt:"2026-09-16"});
 
 function heal(o){let n=0;const s=fresh();if(!o||typeof o!=="object")return{s,n:1};
  const num=(v,d=0)=>Number.isFinite(+v)?+v:(n++,d);
  if(o.budgets&&typeof o.budgets=="object")for(const c in BUD)if(c in o.budgets)s.budgets[c]=Math.max(0,num(o.budgets[c],BUD[c]));
- if(o.ver==2&&o.rates&&typeof o.rates=="object")for(const c of CUR){const r=+o.rates[c];if(r>0)s.rates[c]=r}
- s.rates.CAD=1;if(o.ver==2&&/^\d{4}-\d{2}-\d{2}$/.test(o.ratesAt))s.ratesAt=o.ratesAt;if(+o.alertAt>=50&&+o.alertAt<=100)s.alertAt=Math.round(+o.alertAt);if(+o.income>=0)s.income=+o.income;if(+o.contrib>=0)s.contrib=+o.contrib;if(+o.ret>=-20&&+o.ret<=50)s.ret=+o.ret;
+ if(o.ver>=2&&o.rates&&typeof o.rates=="object")for(const c of CUR){const r=+o.rates[c];if(r>0)s.rates[c]=r}
+ s.rates.CAD=1;if(o.ver>=2&&/^\d{4}-\d{2}-\d{2}$/.test(o.ratesAt))s.ratesAt=o.ratesAt;if(+o.alertAt>=50&&+o.alertAt<=100)s.alertAt=Math.round(+o.alertAt);if(+o.income>=0)s.income=+o.income;if(+o.contrib>=0)s.contrib=+o.contrib;if(+o.ret>=-20&&+o.ret<=50)s.ret=+o.ret;
  if(Array.isArray(o.accts)){const a=o.accts.filter(a=>a&&typeof a=="object").map((a,i)=>({id:num(a.id,i+1),name:String(a.name||"Account").slice(0,30),cur:CUR.includes(a.cur)?a.cur:"CAD",type:a.type=="credit"?"credit":"cash",bal:num(a.bal),limit:Math.max(0,num(a.limit))}));if(a.length)s.accts=a}
  const ids=new Set(s.accts.map(a=>a.id));
  if(Array.isArray(o.tx))s.tx=o.tx.filter(t=>t&&+t.amt>0&&/^\d{4}-\d{2}-\d{2}$/.test(t.date)).map((t,i)=>{if(!ids.has(t.acct))n++;return{id:num(t.id,Date.now()+i),amt:+t.amt,acct:ids.has(t.acct)?t.acct:s.accts[0].id,cat:t.cat in BUD?t.cat:"Other",note:String(t.note||"").slice(0,60),date:t.date,rec:F[t.rec]?t.rec:""}});
- if(Array.isArray(o.inv))s.inv=o.inv.filter(h=>h&&h.sym).map((h,i)=>({id:num(h.id,Date.now()+i),sym:String(h.sym).toUpperCase().slice(0,10),qty:Math.max(0,num(h.qty)),cost:Math.max(0,num(h.cost)),price:Math.max(0,num(h.price)),cur:CUR.includes(h.cur)?h.cur:"CAD",pd:/^\d{4}-\d{2}-\d{2}$/.test(h.pd)?h.pd:""}));
+ if(Array.isArray(o.inv))s.inv=o.inv.filter(h=>h&&h.sym).map((h,i)=>({id:num(h.id,Date.now()+i),sym:(x=>o.ver!==3&&h.cur=="CAD"&&!/[.:]/.test(x)?x+".TO":x)(String(h.sym).toUpperCase().slice(0,12)),st:h.st&&typeof h.st=="object"?{ok:h.st.ok?1:0,via:String(h.st.via||"").slice(0,20),msg:String(h.st.msg||"").slice(0,200),t:+h.st.t||0}:null,qty:Math.max(0,num(h.qty)),cost:Math.max(0,num(h.cost)),price:Math.max(0,num(h.price)),src:h.src=="ai"?"ai":"",at:Math.max(0,num(h.at)),cur:CUR.includes(h.cur)?h.cur:"CAD",pd:/^\d{4}-\d{2}-\d{2}$/.test(h.pd)?h.pd:""}));
  if(Array.isArray(o.hist))s.hist=o.hist.filter(h=>h&&/^\d{4}-\d{2}-\d{2}$/.test(h.d)&&Number.isFinite(+h.nw)).map(h=>({d:h.d,nw:+h.nw})).sort((a,b)=>a.d.localeCompare(b.d)).slice(-1500);
+ if(typeof o.gmKey=="string")s.gmKey=o.gmKey.trim().slice(0,80);if(typeof o.gmModel=="string")s.gmModel=o.gmModel.slice(0,60);s.aiShare=o.aiShare!==false;s.aiPx=+o.aiPx||0;if(o.brief&&typeof o.brief.text=="string"&&/^\d{4}-\d{2}-\d{2}$/.test(o.brief.d))s.brief={d:o.brief.d,text:o.brief.text.slice(0,4000),src:Array.isArray(o.brief.src)?o.brief.src.slice(0,8).filter(x=>x&&/^https:/.test(x.uri)).map(x=>({uri:String(x.uri),title:String(x.title||"").slice(0,80)})):[]};
+ if(typeof o.avKey=="string")s.avKey=o.avKey.trim().slice(0,64);
  if(typeof o.tdKey=="string")s.tdKey=o.tdKey.trim().slice(0,64);
  if(+o.estM>=0)s.estM=+o.estM;if(+o.estW>=0)s.estW=+o.estW;
  if(Array.isArray(o.assets))s.assets=o.assets.filter(a=>a&&a.name).map((a,i)=>({id:num(a.id,Date.now()+i),name:String(a.name).slice(0,40),kind:a.kind=="intangible"?"intangible":"tangible",cur:CUR.includes(a.cur)?a.cur:"CAD",price:Math.max(0,num(a.price)),value:Math.max(0,num(a.value)),date:/^\d{4}-\d{2}-\d{2}$/.test(a.date)?a.date:ld(new Date()),run:Math.max(0,num(a.run)),life:Math.max(0,num(a.life)),per:["week","month","year"].includes(a.per)?a.per:"month"}));
@@ -235,10 +248,10 @@ function varView(){
  return h}
 const ratesNote=()=>{if(LIVE.at)return`Live rates from Twelve Data, updated ${new Date(LIVE.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}. Tap Refresh to update.`;const d=Math.floor((Date.now()-new Date(S.ratesAt+"T00:00"))/864e5);return `Rates are from ${S.ratesAt}${d>0?`, ${d} day${d>1?"s":""} ago`:""}. They don't update on their own, so edit them in Accounts or ask Claude for a refresh.`};
 function astAt(a,m){const v=cv(a.value,a.cur);if(!a.life)return v;const rem=a.life-Math.max(0,(Date.now()-new Date(a.date+"T00:00"))/(365.25*864e5));return rem<=0?0:v*Math.max(0,1-m/12/rem)}
-const HOST=!!window.claude,liveOk=()=>!!MCP||(!HOST&&!!S.tdKey);
+const HOST=!!window.claude,liveOk=()=>!!MCP||(!HOST&&(!!S.tdKey||!!S.avKey||!!S.gmKey)),gmOk=()=>!HOST&&!!S.gmKey,isTSX=x=>/\.(TO|V)$/i.test(x);
 let SAM=null,rcpt=null,MCP=null,LIVE={at:null,busy:false,err:"",fail:[],prog:""};
-const liveBar=()=>{let h="";if(LIVE.busy&&LIVE.prog)h+=`<div class="banner" role="status">${esc(LIVE.prog)}</div>`;if(LIVE.err)h+=`<div class="banner" role="alert">${esc(LIVE.err)}</div>`;if(LIVE.fail.length)h+=`<div class="banner" role="status">Couldn't update ${esc(LIVE.fail.join(", "))}. Check the symbol, and the last saved values are kept.</div>`;return h};
-const mcpMsg=e=>({server_not_connected:"Twelve Data isn't connected. Connect it in Claude's settings, then tap Refresh.",needs_reauth:"Twelve Data needs you to sign in again in Claude's settings.",not_in_manifest:"This page isn't allowed to use Twelve Data for this viewer.",blocked_by_policy:"Twelve Data is blocked by your organization's policy.",approval_required:"Twelve Data needs your approval. Tap Refresh and accept the prompt.",server_unavailable:"Twelve Data didn't answer in time. Tap Refresh to try again.",rate_limited:"Twelve Data's free limit was reached. Wait a minute, then tap Refresh.",credits:"Twelve Data's free limit was reached. Wait a minute, then tap Refresh.",bad_key:"Twelve Data didn't accept your API key. Check it in Accounts.",offline:"Couldn't reach Twelve Data. Check your connection, then tap Refresh.",tool_error:"Twelve Data reported an error: "+(e&&e.message||"try again later.")}[e&&e.code]||"Couldn't reach Twelve Data. Tap Refresh to try again.");
+const liveBar=()=>{let h="";if(LIVE.busy&&LIVE.prog)h+=`<div class="banner" role="status">${esc(LIVE.prog)}</div>`;if(LIVE.err)h+=`<div class="banner" role="alert">${esc(LIVE.err)}</div>`;if(LIVE.fail.length)h+=`<div class="banner" role="status">Couldn't update ${esc(LIVE.fail.join(", "))}. The last saved values are kept.</div>`;return h};
+const mcpMsg=e=>({server_not_connected:"Twelve Data isn't connected. Connect it in Claude's settings, then tap Refresh.",needs_reauth:"Twelve Data needs you to sign in again in Claude's settings.",not_in_manifest:"This page isn't allowed to use Twelve Data for this viewer.",blocked_by_policy:"Twelve Data is blocked by your organization's policy.",approval_required:"Twelve Data needs your approval. Tap Refresh and accept the prompt.",server_unavailable:"Twelve Data didn't answer in time. Tap Refresh to try again.",rate_limited:"Twelve Data's free limit was reached. Wait a minute, then tap Refresh.",credits:"Twelve Data's free limit was reached. Wait a minute, then tap Refresh.",bad_key:"Twelve Data didn't accept your API key. Check it in Accounts.",bad_key_av:"Alpha Vantage didn't accept your API key. Check it in Accounts.",offline:"Couldn't reach Twelve Data. Check your connection, then tap Refresh.",tool_error:"Twelve Data reported an error: "+(e&&e.message||"try again later.")}[e&&e.code]||"Couldn't reach Twelve Data. Tap Refresh to try again.");
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 let lastCall=0;
 async function tdNum(tool,input){
@@ -250,16 +263,101 @@ async function tdNum(tool,input){
  let t=r.payload;if(typeof t!="string"&&typeof t!="number"){const c=(r.content||[]).find(x=>x.type=="text");t=c?c.text:JSON.stringify(t)}
  t=String(t).trim();if(/credit|rate limit/i.test(t))throw{code:"credits"};if(/^error/i.test(t))throw{code:"bad_symbol"};
  const last=t.split(/\r?\n/).pop().split(";").map(Number).find(n=>Number.isFinite(n)&&n>0&&n<1e9);if(!last)throw{code:"bad_symbol"};return last}
-async function refreshLive(){
- if(!liveOk()||LIVE.busy)return;LIVE.busy=true;LIVE.err="";LIVE.fail=[];
- const curs=[...new Set(["USD",...S.accts.map(a=>a.cur),...S.inv.map(h=>h.cur),...S.assets.map(a=>a.cur)])].filter(c=>c!="CAD");
- const hold=S.inv.filter(h=>h.qty>0).slice(0,20),total=curs.length+hold.length;let done=0,got=0;
- const step=l=>{LIVE.prog=`Updating ${l} (${++done} of ${total}). The free plan allows about 8 a minute.`;render()};
+let avLast=0;
+async function avNum(sym){const gap=1500-(Date.now()-avLast);if(gap>0)await wait(gap);avLast=Date.now();
+ const q=new URLSearchParams({function:"GLOBAL_QUOTE",symbol:sym.toUpperCase().replace(/\.TO$/,".TRT").replace(/\.V$/,".TRV"),apikey:S.avKey});let j;
+ try{j=await(await fetch("https://www.alphavantage.co/query?"+q)).json()}catch(e){throw{code:"offline"}}
+ if(j&&(j.Information||j.Note)){if(/api key|apikey|invalid/i.test(j.Information||j.Note)&&!/rate|limit|per day/i.test(j.Information||j.Note))throw{code:"bad_key_av"};throw{code:"av_limit"}}
+ const v=+((j&&j["Global Quote"]||{})["05. price"]);if(!(v>0))throw{code:"bad_symbol"};return v}
+const QS=["Best GIC rates in Canada today","Best credit card for my credit score","Market news this morning","Where am I overspending?"];
+const aiMsg=e=>({bad_key_gm:"Gemini didn't accept your API key. Check it in Accounts.",gm_limit:"Gemini's free limit was reached. Try again in a minute.",offline:"Couldn't reach Gemini. Check your connection.",no_ai:"Add a free Gemini API key on the Accounts tab to use the assistant.",not_granted:"The assistant needs your permission to ask Claude."}[e&&e.code]||"The assistant couldn't answer. Try again.");
+const askOk=()=>!HOST||!!SAMT;
+function finSummary(){
+ const cur=ld(new Date()).slice(0,7),it=items(cur),by={};it.forEach(t=>by[t.cat]=(by[t.cat]||0)+t.base);
+ const cash=S.accts.filter(a=>a.type=="cash").reduce((s,a)=>s+cv(a.bal,a.cur),0),cards=S.accts.filter(a=>a.type=="credit"),owed=cards.reduce((s,a)=>s+cv(a.bal,a.cur),0),lim=cards.reduce((s,a)=>s+cv(a.limit,a.cur),0);
+ const inv=S.inv.reduce((s,h)=>s+cv(h.qty*h.price,h.cur),0),ast=S.assets.reduce((s,a)=>s+cv(a.value,a.cur),0),r=n=>Math.round(n);
+ return`All figures in CAD. Net worth ${r(cash+inv+ast-owed)} (cash ${r(cash)}, investments ${r(inv)}, other assets ${r(ast)}, card debt ${r(owed)}${lim?`, card utilization ${r(owed/lim*100)}%`:""}). Monthly income ${S.income?r(S.income):"not set"}. This month's spending so far ${r(it.reduce((s,t)=>s+t.base,0))} vs budget ${r(Object.values(S.budgets).reduce((a,b)=>a+b,0))}: ${Object.entries(by).map(([c,v])=>`${c} ${r(v)} of ${r(S.budgets[c])}`).join(", ")||"nothing yet"}. Currencies held: ${[...new Set(S.accts.map(a=>a.cur))].join(", ")}. Holdings: ${S.inv.map(h=>`${h.sym} x${h.qty}`).join(", ")||"none"}.`}
+const sysP=()=>`You are the finance assistant inside Pocket Budget, a private budgeting app for a user in Canada. Today is ${new Date().toDateString()}. Use Google Search for anything current, like rates, prices, news, GIC rates and credit card offers, and prefer Canadian sources and products. Write for a phone screen: short paragraphs or short "- " bullet lists, under 180 words unless asked for more. Give specific names and numbers, and say when rates were last seen. For credit cards, match them to the user's credit score; if you don't know it, ask for it in one short question. You are not a financial advisor: give facts and options, suggest confirming rates with the provider, and never promise returns.${S.aiShare?" The user's current numbers: "+finSummary():""}`;
+async function gem(contents,sys,search=true){
+ if(!S.gmKey)throw{code:"no_ai"};
+ for(const m of [...new Set([S.gmModel||"gemini-flash-latest","gemini-flash-latest","gemini-2.5-flash"])]){
+  let res;try{res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":S.gmKey},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents,...(search?{tools:[{google_search:{}}]}:{})})})}catch(e){throw{code:"offline"}}
+  if(res.status==404)continue;if(res.status==429)throw{code:"gm_limit"};
+  const j=await res.json().catch(()=>({}));
+  if(res.status==400&&/api key/i.test(JSON.stringify(j.error||"")))throw{code:"bad_key_gm"};if(res.status==401||res.status==403)throw{code:"bad_key_gm"};
+  if(!res.ok)throw{code:"gm_error"};
+  const c=(j.candidates||[])[0]||{},text=((c.content||{}).parts||[]).map(p=>p.text||"").join("").trim();
+  const src=[];(((c.groundingMetadata||{}).groundingChunks)||[]).forEach(g=>{if(g.web&&/^https:/.test(g.web.uri)&&!src.some(x=>x.title==g.web.title))src.push({uri:g.web.uri,title:String(g.web.title||"Source").slice(0,80)})});
+  if(S.gmModel!=m){S.gmModel=m;save()}
+  if(!text)throw{code:"gm_error"};return{text,src:src.slice(0,6)}}
+ throw{code:"gm_error"}}
+async function aiPrices(hs,cs){
+ const q=`Use Google Search to find the latest trading price of each of these stocks, in the currency they trade in: ${hs.map(h=>isTSX(h.sym)?`${h.sym} (${baseSym(h.sym)} on the ${mktOf(h.sym)=="TSXV"?"TSX Venture Exchange":"Toronto Stock Exchange"}, in CAD)`:h.sym).join(", ")||"none"}. Also find how many Canadian dollars one unit of each of these currencies buys today: ${cs.join(", ")||"none"}. Reply with only JSON and no other text, in this shape: {"prices":{"SYMBOL":123.45},"rates":{"USD":1.39}}. Leave out anything you can't find.`;
+ const r=await gem([{role:"user",parts:[{text:q}]}],"You return precise, current market data as JSON only.");
+ const t=r.text.replace(/```json|```/g,""),a=t.indexOf("{"),b=t.lastIndexOf("}");const o=JSON.parse(t.slice(a,b+1));return{prices:o.prices||{},rates:o.rates||{}}}
+let CHAT=[],chatBusy=false,SAMT=null;
+function md(t){const lines=esc(t).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\[([^\]]+)\]\((https:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').split(/\n/);let h="",ul=false;
+ for(const l of lines){const m=l.match(/^\s*[-*•]\s+(.*)/);if(m){if(!ul){h+="<ul>";ul=true}h+=`<li>${m[1]}</li>`;continue}if(ul){h+="</ul>";ul=false}const hd=l.match(/^#{1,4}\s+(.*)/);if(hd)h+=`<p><b>${hd[1]}</b></p>`;else if(l.trim())h+=`<p>${l}</p>`}if(ul)h+="</ul>";return h}
+const srcList=src=>src&&src.length?`<details class="src"><summary>Sources</summary>${src.map(x=>`<a href="${esc(x.uri)}" target="_blank" rel="noopener">${esc(x.title)}</a>`).join("")}</details>`:"";
+function renderChat(){const c=$("#chatlog");if(!c)return;
+ c.innerHTML=CHAT.length?CHAT.map(m=>`<div class="msg ${m.role}">${m.role=="user"?esc(m.text):md(m.text)+srcList(m.src)}</div>`).join("")+(chatBusy?`<div class="msg model mute">Looking that up...</div>`:""):`<p class="mute" style="text-align:center;margin:24px 0 12px">${!HOST&&!S.gmKey?"Add a free Gemini API key on the Accounts tab to use the assistant.":HOST?"Ask about your budget and spending. This version can't search the web; the installed app with a Gemini key can.":"Ask about rates, cards, markets or your own spending."}</p><div class="chips">${QS.map(q=>`<button onclick="askAI(this.textContent)">${esc(q)}</button>`).join("")}</div>`;
+ c.scrollTop=c.scrollHeight}
+function openChat(q){$("#chat").classList.add("open");renderChat();if(q)askAI(q);else setTimeout(()=>$("#cq").focus(),60)}
+function closeChat(){$("#chat").classList.remove("open")}
+async function askAI(q){q=(q||$("#cq").value).trim();if(!q||chatBusy)return;$("#cq").value="";CHAT.push({role:"user",text:q});chatBusy=true;renderChat();
+ try{let r;
+  if(!HOST){r=await gem(CHAT.slice(-10).map(m=>({role:m.role=="user"?"user":"model",parts:[{text:m.text}]})),sysP())}
+  else{const t=CHAT.slice(-10).map(m=>(m.role=="user"?"User: ":"Assistant: ")+m.text).join("\n\n");const o=await SAMT(`You are the finance assistant in a private budgeting app for a user in Canada. You cannot browse the web, so if a question needs current rates, prices, offers or news, say briefly that this version can't look that up and that the installed app with a Gemini key can, then help with what you can. Keep answers short for a phone. Not financial advice. ${S.aiShare?"User's numbers: "+finSummary():""}\n\nConversation:\n${t}\n\nWrite the assistant's next reply only.`);r={text:o.text,src:[]}}
+  CHAT.push({role:"model",text:r.text,src:r.src})}
+ catch(e){CHAT.push({role:"model",text:aiMsg(e),src:[]})}
+ chatBusy=false;renderChat()}
+let briefBusy=false;
+async function brief(force){if(!gmOk()||briefBusy||locked)return;const d=ld(new Date());if(!force&&(S.brief&&S.brief.d==d||new Date().getHours()<5))return;
+ briefBusy=true;render();
+ try{const syms=S.inv.map(h=>h.sym).slice(0,10).join(", ");const r=await gem([{role:"user",parts:[{text:`Write this morning's market brief for an investor in Canada. Start with one short headline line. Then 4 to 6 "- " bullets, one sentence each, with numbers: the TSX and S&P 500 (latest close or futures), the Canadian dollar against the US dollar, interest rate or Bank of Canada news if any${syms?`, and any news on these holdings: ${syms}`:""}. Use Google Search for today's information.`}]}],sysP());S.brief={d,text:r.text,src:r.src};save()}
+ catch(e){note=aiMsg(e)}briefBusy=false;render()}
+function briefCard(){if(!gmOk())return"";const b=S.brief,today=b&&b.d==ld(new Date());
+ return`<div class="card"><h3>Morning brief <small>${today?new Date().toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}):""}</small></h3>${briefBusy?`<p class="mute" style="margin:0">Writing today's brief...</p>`:b?`<div class="md">${md(b.text)}</div>${srcList(b.src)}${today?"":`<p class="mute" style="font-size:13px">This is from ${b.d}.</p>`}`:`<p class="mute" style="margin:0">Your market brief appears here each morning.</p>`}<button class="btn ghost" onclick="brief(true)" ${briefBusy?"disabled":""}>${b?"Refresh brief":"Get today's brief"}</button></div>`}
+const XL={RY:"RY",TD:"TD",BNS:"BNS",BMO:"BMO",CM:"CM",ENB:"ENB",CNQ:"CNQ",SU:"SU",CP:"CP",CNR:"CNI",SHOP:"SHOP",BCE:"BCE",TRP:"TRP",MFC:"MFC",SLF:"SLF",NTR:"NTR",TRI:"TRI",BN:"BN",BAM:"BAM",CVE:"CVE",IMO:"IMO","TECK.B":"TECK",WCN:"WCN",QSR:"QSR",OTEX:"OTEX",CCO:"CCJ",AEM:"AEM",FNV:"FNV",WPM:"WPM",K:"KGC",MG:"MGA","GIB.A":"GIB",CLS:"CLS",TFII:"TFII",T:"TU","RCI.B":"RCI",FTS:"FTS",AQN:"AQN",BB:"BB",LSPD:"LSPD",DOO:"DOOO",GFL:"GFL",CAE:"CAE",PAAS:"PAAS"};
+const baseSym=x=>x.toUpperCase().replace(/\.(TO|V)$/i,"");
+function normSym(raw,mkt){let x=raw.trim().toUpperCase().replace(/\s+/g,"");let m=mkt;
+ if(/^(TSX|TSE|XTSE):/.test(x)||/(:TSX|\.TSX|\.TO|\.TRT|-T)$/.test(x))m="TSX";if(/^(TSXV|CVE|XTSX):/.test(x)||/(:TSXV|\.V|\.TRV|-V)$/.test(x))m="TSXV";
+ x=x.replace(/^(TSXV|TSX|TSE|XTSE|CVE|XTSX|NYSE|NASDAQ):/,"").replace(/(:TSXV|:TSX|\.TSX|\.TO|\.TRT|\.TRV|-T|-V|\.V)$/,"");
+ return m=="TSX"?x+".TO":m=="TSXV"?x+".V":x}
+const mktOf=x=>/\.TO$/i.test(x)?"TSX":/\.V$/i.test(x)?"TSXV":"US";
+function whyNot(h){const T=isTSX(h.sym);
+ if(T){if(HOST)return XL[baseSym(h.sym)]?"Couldn't reach Twelve Data. Tap Try again.":"Twelve Data's free plan doesn't cover this TSX stock. The installed app can update it with a free Gemini or Alpha Vantage key.";
+  if(!S.avKey&&!S.gmKey)return XL[baseSym(h.sym)]&&S.tdKey?"Couldn't update. Add a free Gemini or Alpha Vantage key on the Accounts tab for more reliable TSX prices.":"Add a free Gemini or Alpha Vantage key on the Accounts tab to update TSX prices.";
+  if(LIVE.avLimit&&!S.gmKey)return"Alpha Vantage's 25 daily updates are used up. Add a free Gemini key, or it will update tomorrow.";
+  return`Couldn't find ${baseSym(h.sym)} on the TSX. Check the symbol, for example RY or XEQT, and the market.`}
+ if(!MCP&&!S.tdKey&&!S.gmKey)return"Add a free Twelve Data or Gemini key on the Accounts tab to update prices.";
+ return`Couldn't find ${h.sym}. Check the symbol and the market.`}
+async function refreshLive(manual,only){
+ if(LIVE.busy)return;
+ if(!liveOk()){if(only){S.inv.filter(h=>only.includes(h.id)).forEach(h=>h.st={ok:0,msg:whyNot(h),t:Date.now()});save();render()}return}
+ LIVE.busy=true;LIVE.err="";LIVE.fail=[];LIVE.avLimit=false;
+ const tdOk=!!MCP||!!S.tdKey,avOk=!HOST&&!!S.avKey,now=()=>Date.now();
+ const hold=(only?S.inv.filter(h=>only.includes(h.id)):S.inv.filter(h=>h.qty>0)).slice(0,20);
+ let curs=only?(tdOk&&hold.some(h=>isTSX(h.sym)&&XL[baseSym(h.sym)])?["USD"]:[]):[...new Set(["USD",...S.accts.map(a=>a.cur),...S.inv.map(h=>h.cur),...S.assets.map(a=>a.cur)])].filter(c=>c!="CAD");
+ const allC=[...curs],updC=new Set(),updH=new Set(),total=(tdOk?curs.length:0)+hold.length;let got=0,done=0;
+ const step=l=>{LIVE.prog=`Updating ${l}${total>1?` (${++done} of ${total})`:""}...`;render()};
+ const ok=(h,v,via)=>{h.price=+(+v).toFixed(4);h.pd=ld(new Date());h.src=via=="Google"?"ai":"";h.st={ok:1,via,t:now()};got++;updH.add(h.id)};
  try{
-  for(const c of curs){step(c);try{S.rates[c]=await tdNum("currency_conversion",{symbol:c+"/CAD"});got++}catch(e){if(e&&e.code=="bad_symbol")LIVE.fail.push(c);else throw e}}
-  for(const h of hold){step(h.sym);try{h.price=await tdNum("get_price",{symbol:h.sym});h.pd=ld(new Date());got++}catch(e){if(e&&e.code=="bad_symbol")LIVE.fail.push(h.sym);else throw e}}
+  if(tdOk)for(const c of curs){step(c);try{S.rates[c]=await tdNum("currency_conversion",{symbol:c+"/CAD"});got++;updC.add(c)}catch(e){if(e&&e.code=="bad_symbol")LIVE.fail.push(c);else throw e}}
+  for(const h of hold){const T=isTSX(h.sym),us=T&&XL[baseSym(h.sym)];
+   if(T&&avOk){if(!manual&&!only&&now()-(h.at||0)<18e5&&h.st&&h.st.ok){updH.add(h.id);continue}
+    step(h.sym);try{const v=await avNum(h.sym);h.at=now();ok(h,v,"Alpha Vantage");continue}catch(e){if(e&&e.code=="av_limit")LIVE.avLimit=true;else if(e&&e.code!="bad_symbol")throw e}}
+   if(tdOk&&(!T||us)){step(h.sym);try{const v=await tdNum("get_price",{symbol:T?us:h.sym});ok(h,T?v*S.rates.USD/(S.rates[h.cur]||1):v,T?"US listing":"Twelve Data")}catch(e){if(e&&e.code!="bad_symbol")throw e}}}
  }catch(e){LIVE.err=mcpMsg(e)}
- if(got){S.ratesAt=ld(new Date());LIVE.at=Date.now();save()}
+ const needH=hold.filter(h=>!updH.has(h.id)),needC=allC.filter(c=>!updC.has(c));let gmErr="";
+ if(gmOk()&&(needH.length||needC.length)&&(manual||only||now()-S.aiPx>18e5)){LIVE.prog="Checking prices with Google Search...";render();
+  try{const r=await aiPrices(needH,needC);S.aiPx=now();
+   needH.forEach(h=>{const v=+(r.prices[h.sym]??r.prices[baseSym(h.sym)]);if(v>0&&(!(h.price>0)||!h.pd||(v/h.price>.2&&v/h.price<5)))ok(h,v,"Google")});
+   needC.forEach(c=>{const v=+r.rates[c];if(v>0&&v/S.rates[c]>.5&&v/S.rates[c]<2){S.rates[c]=v;got++;updC.add(c)}});
+   LIVE.fail=LIVE.fail.filter(f=>!updC.has(f));if(updH.size&&/Twelve Data|Alpha/.test(LIVE.err))LIVE.err="";
+  }catch(e){gmErr=aiMsg(e)}}
+ hold.filter(h=>!updH.has(h.id)).forEach(h=>h.st={ok:0,msg:(gmErr&&isTSX(h.sym)?gmErr+" ":"")+whyNot(h),t:now()});
+ if(got){S.ratesAt=ld(new Date());LIVE.at=now()}save();
  LIVE.busy=false;LIVE.prog="";render()}
 function parseReceipt(t){
  const L=t.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),AM=/(\d{1,3}(?:[ ,]\d{3})+|\d+)[.,](\d{2})(?!\d)/g;
@@ -354,16 +452,16 @@ async function setPin(){const p=$("#pn").value;if(!/^\d{4,8}$/.test(p)){note="Us
 function rmPin(){try{localStorage.removeItem("pb_pin")}catch(e){}note="PIN removed.";render()}
 function lockNow(){if(PIN()){locked=true;render()}}
 function lockView(){$("#app").innerHTML=`<div class="lock"><div style="font-size:44px">🔒</div><h1 style="margin:0">Pocket Budget</h1><p class="mute" style="margin:0">Enter your PIN to open.</p><input id="up" type="password" inputmode="numeric" maxlength="8" autocomplete="off" aria-label="PIN" style="text-align:center;font-size:22px"><button class="btn" onclick="unlock()">Unlock</button><p id="le" class="over" role="alert"></p></div>`;closeSheet()}
-async function unlock(){let ok=false;try{ok=await hash($("#up").value)==PIN()}catch(e){}if(ok){locked=false;render()}else{$("#le").textContent="That PIN doesn't match. Try again.";$("#up").value=""}}
+async function unlock(){let ok=false;try{ok=await hash($("#up").value)==PIN()}catch(e){}if(ok){locked=false;render();brief()}else{$("#le").textContent="That PIN doesn't match. Try again.";$("#up").value=""}}
 function togglePriv(){priv=!priv;render()}
 function setAlert(v){const a=parseInt(v);S.alertAt=a>=50&&a<=100?a:80;save();render()}
 let wp=0;function wipe(b){if(!wp){wp=1;b.textContent="Tap again to erase everything";setTimeout(()=>{wp=0;try{b.textContent="Erase all data"}catch(e){}},4000);return}["pocketbudget2","pb2_bak","pocketbudget1","pb_pin","pb_salt"].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});S=fresh();wp=0;note="All data erased from this browser.";render()}
 function saveLocal(fn,blob){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fn;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
-async function backup(){const blob=new Blob([JSON.stringify({...S,tdKey:undefined,app:"pocket-budget",at:new Date().toISOString()})],{type:"application/json"}),fn="pocket-budget-backup-"+ld(new Date())+".json";
+async function backup(){const blob=new Blob([JSON.stringify({...S,tdKey:undefined,avKey:undefined,gmKey:undefined,app:"pocket-budget",at:new Date().toISOString()})],{type:"application/json"}),fn="pocket-budget-backup-"+ld(new Date())+".json";
  if(DL){try{await DL.save({filename:fn,data:blob})}catch(e){if(!e||e.code!="declined"){note="The backup didn't save. Try again.";render()}}}else if(!HOST)saveLocal(fn,blob)}
-function restore(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||o.app!="pocket-budget")throw 0;const k=S.tdKey;const h=heal(o);S=h.s;if(k)S.tdKey=k;save();note="Backup restored."}catch(e){note="That file isn't a Pocket Budget backup."}render()};r.readAsText(f)}
-function setKey(v){S.tdKey=v.trim().slice(0,64);save();note=S.tdKey?"API key saved. Tap Refresh to load live prices.":"API key removed.";render();if(S.tdKey)refreshLive()}
-function privCard(){return `<div class="card keep"><h3>Privacy and alerts</h3><p class="mute" style="margin:0 0 8px;font-size:14px">Your data lives only in this browser. This page can't send it to other sites, and it loads no fonts or trackers. ${HOST?"The exceptions are a receipt photo you choose to scan, which goes to Claude, and live refresh, which sends currency codes and your stock symbols, but no amounts, to Twelve Data.":"Receipts are read on this phone and never uploaded. Live refresh sends only currency codes and stock symbols, never amounts, to Twelve Data."} A PIN locks the screen but doesn't encrypt what's stored.</p><div class="bud"><label for="aa">Alert me at this % of budget</label><input id="aa" type="number" min="50" max="100" value="${S.alertAt}" onchange="setAlert(this.value)"></div><div class="g2">${PIN()?`<button class="btn ghost" onclick="rmPin()">Remove PIN</button><button class="btn ghost" onclick="lockNow()">Lock now</button>`:`<input id="pn" type="password" inputmode="numeric" maxlength="8" placeholder="New PIN, 4 to 8 digits" autocomplete="off"><button class="btn" style="margin:0" onclick="setPin()">Set PIN</button>`}</div>${DL||!HOST?`<button class="btn ghost" onclick="backup()">Back up data</button>`:""}<button class="btn ghost" onclick="$('#rsf').click()">Restore from backup</button><input id="rsf" type="file" accept=".json,application/json" hidden onchange="restore(this.files[0])"><button class="btn ghost" onclick="wipe(this)">Erase all data</button></div>${HOST?"":`<div class="card keep"><h3>Live prices</h3><p class="mute" style="margin:0 0 8px;font-size:14px">Add a free Twelve Data API key from twelvedata.com to load live exchange rates and stock prices. It's stored only on this device.</p><input type="password" autocomplete="off" placeholder="Twelve Data API key" value="${esc(S.tdKey||"")}" onchange="setKey(this.value)" aria-label="Twelve Data API key"></div>`}`}
+function restore(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||o.app!="pocket-budget")throw 0;const k=S.tdKey,k2=S.avKey,k3=S.gmKey;const h=heal(o);S=h.s;if(k)S.tdKey=k;if(k2)S.avKey=k2;if(k3)S.gmKey=k3;save();note="Backup restored."}catch(e){note="That file isn't a Pocket Budget backup."}render()};r.readAsText(f)}
+function setKey(v,k="tdKey"){S[k]=v.trim().slice(0,80);if(k=="gmKey"){save();note=S[k]?"Gemini key saved. The assistant and morning brief are on.":"Gemini key removed.";render();if(S[k])brief();return}save();note=S[k]?"API key saved. Tap Refresh to load live prices.":"API key removed.";render();if(S[k])refreshLive()}
+function privCard(){return `<div class="card keep"><h3>Privacy and alerts</h3><p class="mute" style="margin:0 0 8px;font-size:14px">Your data lives only in this browser. This page can't send it to other sites, and it loads no fonts or trackers. ${HOST?"The exceptions are a receipt photo you choose to scan, which goes to Claude, and live refresh, which sends currency codes and your stock symbols, but no amounts, to Twelve Data.":"Receipts are read on this phone and never uploaded. Live refresh sends only currency codes and stock symbols, never amounts, to Twelve Data and Alpha Vantage. Assistant questions go to Google Gemini, as set below."} A PIN locks the screen but doesn't encrypt what's stored.</p><div class="bud"><label for="aa">Alert me at this % of budget</label><input id="aa" type="number" min="50" max="100" value="${S.alertAt}" onchange="setAlert(this.value)"></div><div class="g2">${PIN()?`<button class="btn ghost" onclick="rmPin()">Remove PIN</button><button class="btn ghost" onclick="lockNow()">Lock now</button>`:`<input id="pn" type="password" inputmode="numeric" maxlength="8" placeholder="New PIN, 4 to 8 digits" autocomplete="off"><button class="btn" style="margin:0" onclick="setPin()">Set PIN</button>`}</div>${DL||!HOST?`<button class="btn ghost" onclick="backup()">Back up data</button>`:""}<button class="btn ghost" onclick="$('#rsf').click()">Restore from backup</button><input id="rsf" type="file" accept=".json,application/json" hidden onchange="restore(this.files[0])"><button class="btn ghost" onclick="wipe(this)">Erase all data</button></div>${HOST?"":`<div class="card keep"><h3>Live prices</h3><p class="mute" style="margin:0 0 8px;font-size:14px">Add a free Twelve Data API key from twelvedata.com to load live exchange rates and stock prices. It's stored only on this device.</p><input type="password" autocomplete="off" placeholder="Twelve Data API key" value="${esc(S.tdKey||"")}" onchange="setKey(this.value)" aria-label="Twelve Data API key"><p class="mute" style="margin:12px 0 8px;font-size:14px">For Canadian (TSX) stocks, also add a free Alpha Vantage key from alphavantage.co. Enter TSX symbols ending in .TO, like RY.TO or XEQT.TO. The free key allows 25 updates a day, so each TSX stock updates at most every 30 minutes.</p><input type="password" autocomplete="off" placeholder="Alpha Vantage API key" value="${esc(S.avKey||"")}" onchange="setKey(this.value,'avKey')" aria-label="Alpha Vantage API key"></div><div class="card keep"><h3>AI assistant</h3><p class="mute" style="margin:0 0 8px;font-size:14px">Add a free Gemini API key from aistudio.google.com to turn on the assistant, the morning brief, and price checks with Google Search for any stock the other services miss.</p><input type="password" autocomplete="off" placeholder="Gemini API key" value="${esc(S.gmKey||"")}" onchange="setKey(this.value,'gmKey')" aria-label="Gemini API key"><label class="bud" style="margin-top:8px"><span>Include my budget summary in questions</span><input type="checkbox" style="width:auto" ${S.aiShare?"checked":""} onchange="S.aiShare=this.checked;save()"></label><p class="mute" style="margin:6px 0 0;font-size:13px">Questions go to Google Gemini, with a summary of your totals if the box is ticked. On Gemini's free plan, Google may use them to improve its products. Account names and receipts are never sent.</p></div>`}`}
 function draw(){
  const n=note;note="";
  const [y,m]=ym.split("-").map(Number);
@@ -381,7 +479,7 @@ function draw(){
  if(locked)return lockView();
  const NW=cash+inv-owed+ast;snap(NW);
  const ic=(d,l,f,c)=>`<button ${c?`class="${c}"`:""} aria-label="${l}" onclick="${f}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg></button>`;
- let h=`<div class="hd"><h1>${{over:"Overview",spend:"Spending",fc:"Forecast",inv:"Wealth",acc:"Accounts"}[tab]}</h1><div class="ib">${liveOk()?ic("M21 12a9 9 0 11-2.6-6.4M21 4v5h-5",LIVE.busy?"Updating":"Refresh live data","refreshLive()",LIVE.busy?"spin":""):""}${ic(priv?"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM4 4l16 16":"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z",priv?"Show amounts":"Hide amounts","togglePriv()")}${PIN()?ic("M6 11h12v10H6zM9 11V8a3 3 0 016 0v3","Lock","lockNow()"):""}${ic("M12 5v14M5 12h14","Add expense","openSheet()","plus")}</div></div>`+(n?`<div class="banner" role="status">${esc(n)}</div>`:"")+liveBar();
+ let h=`<div class="hd"><h1>${{over:"Overview",spend:"Spending",fc:"Forecast",inv:"Wealth",acc:"Accounts"}[tab]}</h1><div class="ib">${liveOk()?ic("M21 12a9 9 0 11-2.6-6.4M21 4v5h-5",LIVE.busy?"Updating":"Refresh live data","refreshLive(true)",LIVE.busy?"spin":""):""}${ic(priv?"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM4 4l16 16":"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z",priv?"Show amounts":"Hide amounts","togglePriv()")}${askOk()?ic("M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z","Ask the assistant","openChat()"):""}${PIN()?ic("M6 11h12v10H6zM9 11V8a3 3 0 016 0v3","Lock","lockNow()"):""}${ic("M12 5v14M5 12h14","Add expense","openSheet()","plus")}</div></div>`+(n?`<div class="banner" role="status">${esc(n)}</div>`:"")+liveBar();
  if(tab=="over"||tab=="spend")h+=`<div class="months"><button aria-label="Previous month" onclick="shift(-1)">‹</button><b>${new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"})}</b><button aria-label="Next month" onclick="shift(1)">›</button></div>`;
  const al=alertList(ym);if(util>.3)al.push(["amber",`Card utilization is ${Math.round(util*100)}%, above the 30% mark that starts to hurt your score.`]);
  if(tab=="over"||tab=="spend")h+=al.slice(0,4).map(a=>`<div class="alert ${a[0]=="red"?"red":""}" role="alert">${esc(a[1])}</div>`).join("");
@@ -395,6 +493,7 @@ function draw(){
   if(!tp.length)tp.push(spent?"No red flags this month. Keep going.":"Add a few expenses to get suggestions tailored to you.");
   const r6=[];for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1),k=d.getFullYear()+"-"+p2(d.getMonth()+1);r6.push({k,l:d.toLocaleDateString(undefined,{month:"short"}),v:items(k).reduce((s,t)=>s+t.base,0)})}
   const avg=r6.reduce((s,x)=>s+x.v,0)/6,f=fcModel();
+  h+=briefCard();
   h+=`<section class="hero"><div class="big ${NW<0?"over":""}">${m0(NW)}</div><p>${nwChange()}</p></section>
   <div class="card"><div class="seg sm">${["1M","6M","1Y","5Y"].map(r=>`<button aria-pressed="${nwR==r}" onclick="nwR='${r}';render()">${r}</button>`).join("")}</div><div class="scrub" id="scrub">Drag across the chart to see values.</div>${nwChart()}<div class="lg" style="grid-template-columns:1fr 1fr"><div><i style="background:var(--acc)"></i><span>History</span></div><div><i style="background:var(--mute)"></i><span>Forecast</span></div></div></div>
   <div class="card"><h3>Spending <small>6-month avg ${m0(avg)}</small></h3><div class="top"><span>${m0(spent)} this month</span><span>${budT?Math.round(r*100)+"% of "+m0(budT):"No budget set"}</span></div><div class="bar" style="margin-bottom:14px"><i class="${cls(r)}" style="width:${pct(r)}%"></i></div>${barChart(r6,budT)}</div>
@@ -402,6 +501,7 @@ function draw(){
   <div class="card"><h3>What you own</h3>${alloc(cash,inv,ast,owed)}</div>
   <div class="card"><h3>Cash flow <small>this month</small></h3>${S.income?`<div class="stat"><div><small>Income</small><b>${m0(S.income)}</b></div><div><small>Spending</small><b>${m0(f.spend)}</b></div><div><small>Saving</small><b class="${S.income-f.spend<0?"over":"ok"}">${Math.round((S.income-f.spend)/S.income*100)}%</b></div></div>`:`<p class="empty" style="margin:0">Add your monthly income on the Forecast tab to see your saving rate.</p>`}</div>
   <div class="card"><h3>Recurring vs one-time</h3><div class="bar"><i class="blue" style="width:${spent?recT/spent*100:0}%"></i><i class="alt" style="width:${spent?oneT/spent*100:0}%"></i></div><div class="lg"><div><i style="background:var(--acc)"></i><span>Recurring</span><b>${m0(recT)}</b></div><div><i style="background:var(--gfx-o)"></i><span>One-time</span><b>${m0(oneT)}</b></div></div></div>
+  ${askOk()?`<div class="card"><h3>Ask about your money</h3><div class="chips">${QS.map(q=>`<button onclick="openChat(this.textContent)">${esc(q)}</button>`).join("")}</div></div>`:""}
   <div class="card"><h3>Credit score impact</h3>${util==null?`<p class="empty">Add a credit card under Accounts to see how your balances affect your score.</p>`:`<div class="top"><span class="${tier(util)[1]}">${tier(util)[0]}</span><span>${Math.round(util*100)}% utilization</span></div><div class="bar"><i class="${cls(util/.5)}" style="width:${pct(util)}%"></i></div><p class="mute" style="margin:8px 0 0;font-size:14px">Utilization is about a third of a typical credit score. Under 10% helps most, over 30% starts to hurt. This is an estimate, not your actual score.</p>`}</div>
   <div class="card"><h3>Ways to improve</h3>${tp.slice(0,4).map(t=>`<div class="tip">${esc(t)}</div>`).join("")}</div>
   <div class="card"><h3>In other currencies</h3><div class="g2">${CUR.filter(c=>c!="CAD").map(c=>`<div><small>${c}</small><div><b>${fm(NW/S.rates[c],c,0)}</b></div></div>`).join("")}</div><p class="mute" style="margin:10px 0 0;font-size:13px">${ratesNote()}</p></div>
@@ -418,9 +518,9 @@ function draw(){
   h+=subTabs();if(sub=="ast"){h+=astView()}else{
   const g=inv-invCost;
   h+=`<section class="hero"><div class="big">${m0(inv)}</div><p class="${g>=0?"gain":"loss"}">${g>=0?"Up":"Down"} ${m0(Math.abs(g))}${invCost?" ("+(g/invCost*100).toFixed(1)+"%)":""} since you bought.</p></section>
-  <p class="mute" style="font-size:14px">${liveOk()?"Tap Refresh for each holding's latest price from Twelve Data. Use the symbol as Twelve Data lists it, like AAPL or SHOP.":"Prices don't update by themselves. Enter the latest price on each holding to refresh your totals."}</p>`;
-  h+=S.inv.length?S.inv.map(x=>{const v=x.qty*x.price,gl=v-x.qty*x.cost;return`<div class="card"><div class="top"><b>${esc(x.sym)}</b><span>${x.qty} units, bought at ${fm(x.cost,x.cur,2)}</span></div><div class="top"><span>${fm(v,x.cur,2)}</span><span class="${gl>=0?"gain":"loss"}">${gl>=0?"+":""}${fm(gl,x.cur,2)}</span></div><div class="bud"><label for="p${x.id}">Current price${x.pd?" ("+x.pd+")":""}</label><input id="p${x.id}" type="number" inputmode="decimal" min="0" step="any" value="${x.price}" onchange="setPrice(${x.id},this.value)"><button class="x" aria-label="Remove holding" onclick="delInv(${x.id})">×</button></div></div>`}).join(""):`<div class="empty">No holdings yet. Add your first below.</div>`;
-  h+=`<div class="card"><h3>Add a holding</h3><div class="g2"><input id="is" placeholder="Symbol, e.g. VTI" maxlength="10"><select id="ic">${CUR.map(c=>`<option>${c}</option>`).join("")}</select><input id="iq" type="number" inputmode="decimal" placeholder="Units" step="any"><input id="ib" type="number" inputmode="decimal" placeholder="Cost per unit" step="any"></div><input id="ip" type="number" inputmode="decimal" placeholder="Current price" step="any" style="margin-top:8px"><button class="btn" onclick="addInv()">Add holding</button></div>`;}
+  <p class="mute" style="font-size:14px">${liveOk()?"Prices update when you add a holding and each time you tap Refresh. Pick the market when you add a holding. Each one shows when its price last updated and from where.":"Prices don't update by themselves. Enter the latest price on each holding to refresh your totals."}</p>`;
+  h+=S.inv.length?S.inv.map(x=>{const v=x.qty*x.price,gl=v-x.qty*x.cost;return`<div class="card"><div class="top"><b>${esc(baseSym(x.sym))}${isTSX(x.sym)?` <small>${mktOf(x.sym)=="TSXV"?"TSX-V":"TSX"}</small>`:""}</b><span>${x.qty} units, bought at ${fm(x.cost,x.cur,2)}</span></div><div class="top"><span>${fm(v,x.cur,2)}</span><span class="${gl>=0?"gain":"loss"}">${gl>=0?"+":""}${fm(gl,x.cur,2)}</span></div>${stLine(x)}<div class="bud"><label for="p${x.id}">Current price (${x.cur})</label><input id="p${x.id}" type="number" inputmode="decimal" min="0" step="any" value="${x.price}" onchange="setPrice(${x.id},this.value)"><button class="x" aria-label="Remove holding" onclick="delInv(${x.id})">×</button></div><div class="bud"><label for="m${x.id}">Market</label><select id="m${x.id}" style="width:auto" onchange="setMkt(${x.id},this.value)">${MK.map(([k,l])=>`<option value="${k}" ${mktOf(x.sym)==k?"selected":""}>${l}</option>`).join("")}</select></div></div>`}).join(""):`<div class="empty">No holdings yet. Add your first below.</div>`;
+  h+=`<div class="card"><h3>Add a holding</h3><div class="g2"><input id="is" placeholder="Symbol, e.g. RY or XEQT" maxlength="16" autocapitalize="characters" autocorrect="off"><select id="im" aria-label="Market" onchange="$('#ic').value=this.value=='US'?'USD':'CAD'">${MK.map(([k,l])=>`<option value="${k}">${l}</option>`).join("")}</select><select id="ic" aria-label="Currency">${CUR.map(c=>`<option>${c}</option>`).join("")}</select><input id="iq" type="number" inputmode="decimal" placeholder="Units" step="any"><input id="ib" type="number" inputmode="decimal" placeholder="Cost per unit" step="any"><input id="ip" type="number" inputmode="decimal" placeholder="Current price (optional)" step="any"></div><button class="btn" onclick="addInv()">Add holding</button></div>`;}
  }else{
   h+=S.accts.map(a=>`<div class="card"><div class="top"><b>${esc(a.name)} <small>${a.cur}, ${a.type=="credit"?"credit card":"cash"}</small></b><button class="x" aria-label="Delete account" onclick="delAcct(${a.id})">×</button></div><div class="bud"><label for="bal${a.id}">${a.type=="credit"?"Balance owed":"Balance"}</label><input id="bal${a.id}" type="number" inputmode="decimal" step="any" value="${a.bal.toFixed(2)}" onchange="setBal(${a.id},this.value)"></div><small>${a.cur!="CAD"?"About "+m0(cv(a.bal,a.cur))+". ":""}${a.type=="credit"&&a.limit?"Limit "+fm(a.limit,a.cur,0)+", "+Math.round(a.bal/a.limit*100)+"% used.":""}</small></div>`).join("");
   h+=`<div class="card"><h3>Add an account</h3><input id="an" placeholder="Name, e.g. Euro savings" maxlength="30"><div class="g2"><select id="acu">${CUR.map(c=>`<option>${c}</option>`).join("")}</select><select id="aty"><option value="cash">Cash account</option><option value="credit">Credit card</option></select><input id="ab" type="number" inputmode="decimal" step="any" placeholder="Balance or owed"><input id="al" type="number" inputmode="decimal" placeholder="Card limit"></div><button class="btn" onclick="addAcct()">Add account</button></div>
@@ -438,9 +538,16 @@ function setBal(id,v){acc(id).bal=parseFloat(v)||0;save();render()}
 function setRate(c,v){const r=parseFloat(v);if(r>0){S.rates[c]=r;S.ratesAt=ld(new Date())}save();render()}
 function setPrice(id,v){const x=S.inv.find(i=>i.id==id);if(x)x.price=Math.max(0,parseFloat(v)||0);save();render()}
 function delInv(id){S.inv=S.inv.filter(i=>i.id!=id);save();render()}
+const MK=[["TSX","Canada (TSX)"],["TSXV","Canada (TSX-V)"],["US","US"]];
+function stLine(x){const st=x.st,tm=t=>new Date(t).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}),day=t=>ld(new Date(t))==ld(new Date())?tm(t):new Date(t).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+ if(LIVE.busy&&LIVE.prog.includes(x.sym))return`<p class="mute" style="margin:0 0 6px;font-size:14px">Updating price...</p>`;
+ if(!st)return`<p class="mute" style="margin:0 0 6px;font-size:14px">Price not updated yet. <button class="lnk" onclick="refreshLive(true,[${x.id}])">Update now</button></p>`;
+ if(st.ok)return`<p style="margin:0 0 6px;font-size:14px"><span class="ok">●</span> <span class="mute">Updated ${day(st.t)} via ${esc(st.via)}${st.via=="Google"?", may be delayed":st.via=="US listing"?", converted to CAD":""}</span></p>`;
+ return`<p class="warn" style="margin:0 0 6px;font-size:14px">${esc(st.msg)} <button class="lnk" onclick="refreshLive(true,[${x.id}])">Try again</button></p>`}
+function setMkt(id,m){const h=S.inv.find(x=>x.id==id);if(!h)return;h.sym=normSym(baseSym(h.sym),m);h.cur=m=="US"?"USD":"CAD";h.st=null;h.at=0;save();render();refreshLive(true,[id])}
 function addInv(){const s=$("#is").value.trim(),q=parseFloat($("#iq").value),b=parseFloat($("#ib").value),p=parseFloat($("#ip").value);
  if(!s||!(q>0)){note="Enter a symbol and the number of units.";return render()}
- S.inv.push({id:Date.now(),sym:s.toUpperCase(),qty:q,cost:b||0,price:p||b||0,cur:$("#ic").value});save();render()}
+ const sym=normSym(s,$("#im").value),id=Date.now();S.inv.push({id,sym,qty:q,cost:b||0,price:p||b||0,cur:isTSX(sym)?"CAD":$("#ic").value,st:null});save();note=`Added ${baseSym(sym)}. Getting its live price...`;render();refreshLive(true,[id])}
 function addAcct(){const n=$("#an").value.trim();if(!n){note="Give the account a name.";return render()}
  S.accts.push({id:Date.now(),name:n,cur:$("#acu").value,type:$("#aty").value,bal:parseFloat($("#ab").value)||0,limit:parseFloat($("#al").value)||0});save();render()}
 function delAcct(id){if(S.accts.length<2)note="Keep at least one account.";else if(S.tx.some(t=>t.acct==id))note="Delete this account's expenses first.";else{S.accts=S.accts.filter(a=>a.id!=id);save()}render()}
@@ -472,10 +579,12 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden&&PIN()){loc
 $("#rf").addEventListener("change",e=>scanReceipt(e.target.files[0]));if(!HOST)$("#scanb").hidden=false;
 $("#ac").addEventListener("change",()=>{if(rcpt&&rcpt.cur){const a=acc($("#ac").value);$("#sm").textContent=rcpt.cur!=a.cur?`This receipt is in ${rcpt.cur}. It will be saved in ${a.cur} at your saved rate.`:""}});
 load();locked=!!PIN();render();
+$("#cq").addEventListener("keydown",e=>{if(e.key=="Enter")askAI()});
+setTimeout(()=>brief(),1200);document.addEventListener("visibilitychange",()=>{if(!document.hidden)brief()});
 document.addEventListener("pointermove",scrub);if(!HOST&&S.tdKey&&!locked)refreshLive();document.addEventListener("pointerdown",scrub);
 try{window.claude&&claude.use("mcp").then(m=>{if(!m)return;MCP=m;render();refreshLive()}).catch(()=>{})}catch(e){}
 setInterval(()=>{const t=document.activeElement&&document.activeElement.tagName;if(liveOk()&&!document.hidden&&!locked&&!/INPUT|SELECT/.test(t||"")&&!$("#sheet").classList.contains("open"))refreshLive()},9e5);
-try{window.claude&&claude.use("sample").then(async x=>{if(!x)return;const l=await x.limits().catch(()=>null);if(l&&l.images){SAM=x;$("#scanb").hidden=false}}).catch(()=>{})}catch(e){}
+try{window.claude&&claude.use("sample").then(async x=>{if(!x)return;SAMT=x;render();const l=await x.limits().catch(()=>null);if(l&&l.images){SAM=x;$("#scanb").hidden=false}}).catch(()=>{})}catch(e){}
 try{window.claude&&claude.use("downloads").then(d=>{DL=d;if(d)render()}).catch(()=>{})}catch(e){}
 </script><script>if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))</script>
 </body></html>
