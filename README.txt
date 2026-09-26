@@ -6,6 +6,8 @@ Pocket Budget - install on iPhone
 
 The app opens full screen with its own icon and works offline. Your data stays on your phone.
 
+Updating: upload the new index.html and sw.js to your GitHub repository. The installed app checks for a new version each time you open it or tap Refresh, and updates itself (GitHub can take up to 10 minutes to publish).
+
 Optional free keys (Accounts tab):
 - Twelve Data (twelvedata.com): live exchange rates and US stock prices.
 - Alpha Vantage (alphavantage.co): Canadian TSX stock and ETF prices, 25 updates a day.
