@@ -69,7 +69,7 @@ input,select{font:inherit;color:var(--ink);background:var(--fill);border:0;borde
 .seg{display:flex;gap:2px;padding:2px;background:var(--fill);border-radius:9px;margin-bottom:14px}
 .seg button{flex:1;border:0;background:none;padding:7px 4px;border-radius:7px;font-weight:600;font-size:14px;color:var(--ink)}
 .seg button[aria-pressed="true"]{background:var(--surf);box-shadow:0 1px 3px rgba(0,0,0,.12)}
-.seg.sm{margin:0 0 10px}
+.seg.sm{margin:0 0 10px}.seg.sm button{font-size:13px;padding:7px 4px;white-space:nowrap}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .seg button[aria-pressed="true"]{background:#636366}}:root[data-theme="dark"] .seg button[aria-pressed="true"]{background:#636366}
 .lg{display:grid;gap:9px;margin-top:12px}
 .lg div{display:flex;align-items:center;gap:8px;font-size:15px}
@@ -98,6 +98,7 @@ nav svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8;st
 .acts{display:flex;gap:10px}.acts button{flex:1;padding:14px;border-radius:12px;border:0;background:var(--surf);color:var(--acc);font-weight:600}
 .acts .go{background:var(--acc);color:#fff}
 details summary{font-weight:600;cursor:pointer}
+.cmpb{display:grid;grid-template-columns:118px 1fr 52px;gap:8px;align-items:center;font-size:13px;margin:7px 0}.cmpb span{color:var(--mute);line-height:1.2}.cmpb b{text-align:right;font-size:15px}
 .lnk{border:0;background:none;color:var(--acc);font-weight:600;padding:0;font-size:inherit}
 .chips{display:flex;flex-wrap:wrap;gap:8px}.chips button{border:0;background:var(--fill);color:var(--acc);border-radius:18px;padding:9px 13px;font-size:15px;font-weight:500;text-align:left}
 #chat{position:fixed;inset:0;z-index:12;background:var(--bg);display:none}#chat.open{display:block}
@@ -113,13 +114,14 @@ details summary{font-weight:600;cursor:pointer}
 <main id="app"></main>
 <div id="chat" role="dialog" aria-modal="true" aria-label="Assistant"><div class="cp"><div class="ch"><b>Assistant</b><button class="x" aria-label="Close" onclick="closeChat()">×</button></div><div id="chatlog" aria-live="polite"></div><div class="cin"><input id="cq" placeholder="Ask about money, rates or markets" autocomplete="off" aria-label="Your question"><button class="btn" style="width:auto;margin:0;padding:11px 16px" onclick="askAI()">Ask</button></div></div></div>
 <div id="sheet" role="dialog" aria-modal="true" aria-label="Add expense"><div class="panel">
+<div class="seg" style="margin:0"><button id="kx" aria-pressed="true" onclick="setKind('x')">Expense</button><button id="ki" aria-pressed="false" onclick="setKind('i')">Earning</button></div>
 <button class="btn ghost" id="scanb" hidden onclick="$('#rf').click()" style="margin:0">Scan a receipt</button><input id="rf" type="file" accept="image/*" capture="environment" hidden><p id="sm" class="mute" style="margin:0;font-size:14px" role="status"></p>
 <label>Amount<input id="a" class="amt" inputmode="decimal" placeholder="0.00"></label>
 <label>Account<select id="ac"></select></label>
 <label>Note (optional)<input id="n" maxlength="60" placeholder="What was it for?"></label>
-<div class="g2"><label>Category<select id="c"></select></label><label>Repeats<select id="r"><option value="">One-time</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label></div>
+<div class="g2"><label>Category<select id="c"></select></label><label id="rl">Repeats<select id="r"><option value="">One-time</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label></div>
 <label>Date<input id="d" type="date"></label>
-<div class="acts"><button onclick="closeSheet()">Cancel</button><button class="go" onclick="addTx()">Save expense</button></div>
+<div class="acts"><button onclick="closeSheet()">Cancel</button><button class="go" onclick="addTx()" id="sv">Save expense</button></div>
 </div></div>
 <script>
 const CUR=["CAD","USD","CNY","EUR","GBP","JPY","AUD","CHF","INR","MXN","NGN"];
@@ -127,14 +129,17 @@ const RATE={CAD:1,USD:1.391,CNY:.208,EUR:1.607,GBP:1.876,JPY:.00893,AUD:.99,CHF:
 const BUD={Rent:1200,Groceries:400,Transport:120,Bills:200,Health:60,"Eating out":150,Fun:100,Shopping:120,Subscriptions:40,Other:80};
 const GRP={Rent:"Need",Groceries:"Need",Transport:"Need",Bills:"Need",Health:"Need","Eating out":"Want",Fun:"Want",Shopping:"Want",Subscriptions:"Want",Other:"Want"};
 const RULES=[["Rent",/rent|mortgage/],["Subscriptions",/netflix|spotify|hulu|prime|subscri|gym|icloud|disney/],["Groceries",/grocer|market|aldi|walmart|tesco|costco|loblaw|sobeys|no frills|superstore|safeway|freshco|kroger|whole foods|carrefour|超市|家乐福/],["Eating out",/cafe|coffee|restaurant|pizza|burger|takeaway|doordash|uber eats|starbucks|tim hortons|mcdonald|subway|餐/],["Transport",/uber|lyft|fuel|gas|bus|train|taxi|metro|parking|shell|esso|petro|chevron|presto/],["Bills",/electric|water|internet|phone|insurance|utility|wifi/],["Health",/pharmac|doctor|dental|clinic|hospital/],["Shopping",/amazon|cloth|shoe|ikea|mall/],["Fun",/cinema|movie|game|concert|steam|ticket/]];
-const F={weekly:52/12,monthly:1,yearly:1/12};
+const F={weekly:52/12,biweekly:26/12,semimonthly:2,monthly:1,quarterly:1/3,yearly:1/12};
+const FL={weekly:"Weekly",biweekly:"Bi-weekly",semimonthly:"Semi-monthly",monthly:"Monthly",quarterly:"Every 3 months",yearly:"Yearly"};
+const RX=[["","One-time"],["weekly","Weekly"],["biweekly","Bi-weekly"],["semimonthly","Semi-monthly"],["monthly","Monthly"],["quarterly","Every 3 months"],["yearly","Yearly"]];
+const ICAT=["Salary","Side income","Sold items","Tax refund","Government benefits","Investment income","Gift","Other income"];
 const $=s=>document.querySelector(s);
 const p2=n=>String(n).padStart(2,"0");
 const ld=d=>d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fm=(n,c,d)=>n.toLocaleString(undefined,{style:"currency",currency:c,currencyDisplay:c=="CAD"?"narrowSymbol":"symbol",maximumFractionDigits:d})
 const m0=n=>n.toLocaleString(undefined,{style:"currency",currency:"CAD",currencyDisplay:"narrowSymbol",maximumFractionDigits:0});
-const fresh=()=>({rates:{...RATE},accts:[{id:1,name:"Checking",cur:"CAD",type:"cash",bal:0,limit:0}],tx:[],inv:[],budgets:{...BUD},alertAt:80,income:0,ret:6,contrib:0,assets:[],estM:0,estW:0,hist:[],ver:3,ratesAt:"2026-09-16"});
+const fresh=()=>({rates:{...RATE},accts:[{id:1,name:"Checking",cur:"CAD",type:"cash",bal:0,limit:0}],tx:[],inv:[],budgets:{...BUD},alertAt:80,income:0,ret:6,contrib:0,assets:[],estM:0,estW:0,hist:[],inc:[],by:0,gross:0,ver:3,ratesAt:"2026-09-16"});
 
 function heal(o){let n=0;const s=fresh();if(!o||typeof o!=="object")return{s,n:1};
  const num=(v,d=0)=>Number.isFinite(+v)?+v:(n++,d);
@@ -144,6 +149,8 @@ function heal(o){let n=0;const s=fresh();if(!o||typeof o!=="object")return{s,n:1
  if(Array.isArray(o.accts)){const a=o.accts.filter(a=>a&&typeof a=="object").map((a,i)=>({id:num(a.id,i+1),name:String(a.name||"Account").slice(0,30),cur:CUR.includes(a.cur)?a.cur:"CAD",type:a.type=="credit"?"credit":"cash",bal:num(a.bal),limit:Math.max(0,num(a.limit))}));if(a.length)s.accts=a}
  const ids=new Set(s.accts.map(a=>a.id));
  if(Array.isArray(o.tx))s.tx=o.tx.filter(t=>t&&+t.amt>0&&/^\d{4}-\d{2}-\d{2}$/.test(t.date)).map((t,i)=>{if(!ids.has(t.acct))n++;return{id:num(t.id,Date.now()+i),amt:+t.amt,acct:ids.has(t.acct)?t.acct:s.accts[0].id,cat:t.cat in BUD?t.cat:"Other",note:String(t.note||"").slice(0,60),date:t.date,rec:F[t.rec]?t.rec:""}});
+ if(Array.isArray(o.inc))s.inc=o.inc.filter(t=>t&&+t.amt>0&&/^\d{4}-\d{2}-\d{2}$/.test(t.date)).map((t,i)=>({id:num(t.id,Date.now()+i),amt:+t.amt,acct:ids.has(t.acct)?t.acct:s.accts[0].id,cat:ICAT.includes(t.cat)?t.cat:"Other income",note:String(t.note||"").slice(0,60),date:t.date,rec:F[t.rec]?t.rec:""}));
+ {const yb=Math.round(+o.by);if(yb>1900&&yb<=new Date().getFullYear())s.by=yb;if(+o.gross>0)s.gross=+o.gross}
  if(Array.isArray(o.inv))s.inv=o.inv.filter(h=>h&&h.sym).map((h,i)=>({id:num(h.id,Date.now()+i),sym:(x=>o.ver!==3&&h.cur=="CAD"&&!/[.:]/.test(x)?x+".TO":x)(String(h.sym).toUpperCase().slice(0,12)),st:h.st&&typeof h.st=="object"?{ok:h.st.ok?1:0,via:String(h.st.via||"").slice(0,20),msg:String(h.st.msg||"").slice(0,200),t:+h.st.t||0}:null,qty:Math.max(0,num(h.qty)),cost:Math.max(0,num(h.cost)),price:Math.max(0,num(h.price)),src:h.src=="ai"?"ai":"",at:Math.max(0,num(h.at)),cur:CUR.includes(h.cur)?h.cur:"CAD",pd:/^\d{4}-\d{2}-\d{2}$/.test(h.pd)?h.pd:""}));
  if(Array.isArray(o.hist))s.hist=o.hist.filter(h=>h&&/^\d{4}-\d{2}-\d{2}$/.test(h.d)&&Number.isFinite(+h.nw)).map(h=>({d:h.d,nw:+h.nw})).sort((a,b)=>a.d.localeCompare(b.d)).slice(-1500);
  if(typeof o.gqKey=="string")s.gqKey=o.gqKey.trim().slice(0,100);s.gqNoSearch=+o.gqNoSearch||0;
@@ -170,6 +177,71 @@ const tier=u=>u<=.09?["Helping your score","ok"]:u<=.29?["Fine for your score","
 const cls=r=>r>1?"over":r>=.85?"warn":"";
 const pct=r=>Math.min(Math.max(r,0),1)*100;
 
+const nd=d=>new Date(d+"T12:00").toLocaleDateString(undefined,{month:"short",day:"numeric"});
+function payDates(t,from,to){const out=[];if(!t.rec){if(t.date>=from&&t.date<=to)out.push(t.date);return out}
+ const s=new Date(t.date+"T12:00"),f=new Date(from+"T12:00"),e=new Date(to+"T12:00"),push=d=>{if(d>=s&&d>=f&&d<=e)out.push(ld(d))};
+ if(t.rec=="weekly"||t.rec=="biweekly"){const st=t.rec=="weekly"?7:14;let d=new Date(s);if(d<f)d.setDate(d.getDate()+Math.floor((f-d)/(st*864e5))*st);for(let i=0;d<=e&&i<400;i++){push(new Date(d));d.setDate(d.getDate()+st)}return out}
+ const D=s.getDate(),step={monthly:1,semimonthly:1,quarterly:3,yearly:12}[t.rec],sm=s.getFullYear()*12+s.getMonth(),em=e.getFullYear()*12+e.getMonth();
+ for(let mm=Math.max(sm,f.getFullYear()*12+f.getMonth());mm<=em;mm++){if((mm-sm)%step)continue;const y=Math.floor(mm/12),m=mm%12,dim=new Date(y,m+1,0).getDate();
+  const days=t.rec=="semimonthly"?(D==1?[1,15]:D==15||D>=28?[15,dim]:[...new Set([Math.min(D,dim),Math.min(D<15?D+15:D-15,dim)])]):[Math.min(D,dim)];days.forEach(dd=>push(new Date(y,m,dd,12)))}
+ return out.sort()}
+function incIn(k){const[y,m]=k.split("-").map(Number),to=ld(new Date(y,m,0));return S.inc.flatMap(t=>payDates(t,k+"-01",to).map(d=>({...t,date:d,base:cv(t.amt,acc(t.acct).cur)})))}
+const incRecM=()=>S.inc.filter(t=>t.rec).reduce((s,t)=>s+cv(t.amt,acc(t.acct).cur)*F[t.rec],0);
+function incOneM(){const n=new Date(),from=ld(new Date(n.getFullYear()-1,n.getMonth(),n.getDate()+1)),to=ld(n);return S.inc.filter(t=>!t.rec&&t.date>=from&&t.date<=to).reduce((s,t)=>s+cv(t.amt,acc(t.acct).cur),0)/12}
+function incM(){return S.inc.length?incRecM()+incOneM():(S.income||0)}
+const BM={
+ TO:{name:"Toronto",inc:{src:"City of Toronto median total income by age, latest census (2020 incomes)",cur:"CAD",g:[[15,24,17200],[25,34,44000],[35,44,54000],[45,54,50800],[55,64,42400],[65,200,31800]]},
+  sp:{src:"Ontario average household spending, 2023; Toronto isn't published by age",cur:"CAD",hh:1,g:[[0,200,81975]],all:1}},
+ CA:{name:"Canada",inc:{src:"Statistics Canada median total income by age, 2024",cur:"CAD",g:[[25,34,49600],[35,44,63800],[45,54,65800],[55,64,53300],[65,200,39200]]},
+  sp:{src:"Statistics Canada average household spending by age, 2023",cur:"CAD",hh:1,g:[[0,29,68400],[30,39,85600],[40,54,97900],[55,64,77800],[65,200,53200]]}},
+ NA:{name:"North America",inc:{src:"U.S. median earnings of full-time workers by age, 2025 (BLS), converted to CAD",cur:"USD",g:[[20,24,40700],[25,34,59200],[35,44,70300],[45,54,70800],[55,64,67400],[65,200,62300]]},
+  sp:{src:"U.S. average household spending by age, 2024 (BLS Consumer Expenditure Survey), converted to CAD",cur:"USD",hh:1,g:[[0,24,47283],[25,34,74475],[35,44,91229],[45,54,100327],[55,64,84946],[65,200,61432]]}},
+ W:{name:"World",inc:{src:"World median income per person, about $10.70 a day in international dollars (World Bank data); a rough conversion",cur:"USD",g:[[0,200,3920]],all:1},sp:null}};
+const age=()=>S.by?new Date().getFullYear()-S.by:null;
+function bmFor(set,a){if(!set)return null;const g=set.g.find(([lo,hi])=>a>=lo&&a<=hi);return g?{v:cv(g[2],set.cur),lo:g[0],hi:g[1]}:null}
+const grpL=(b,set)=>set.all?"all ages":b.hi>=200?`${b.lo}+`:b.lo==0?`under ${b.hi+1}`:`${b.lo}–${b.hi}`;
+function setBy(v){const y=Math.round(+v),n=new Date().getFullYear();if(y>n-110&&y<=n-10){S.by=y;save()}else if(v)note="Enter a birth year like 1995.";render()}
+function setGross(v){const g=parseFloat(v);S.gross=g>0?g:0;save();render()}
+function cmpCard(){const a=age();
+ const det=`<details style="margin-top:10px"><summary class="mute" style="font-size:14px">Your details</summary><div class="bud"><label for="byr">Birth year</label><input id="byr" type="number" inputmode="numeric" value="${S.by||""}" placeholder="e.g. 1995" onchange="setBy(this.value)"></div><div class="bud"><label for="gri">Before-tax income a year (optional)</label><input id="gri" type="number" inputmode="decimal" value="${S.gross||""}" placeholder="From logged pay" onchange="setGross(this.value)"></div></details>`;
+ if(!a)return`<div class="card"><h3>How you compare</h3><p class="mute" style="margin:0 0 8px;font-size:15px">Add your birth year to compare your earnings and spending with people your age in Toronto, Canada, North America and the world. It stays on this phone.</p><div class="bud"><label for="byr">Birth year</label><input id="byr" type="number" inputmode="numeric" placeholder="e.g. 1995" onchange="setBy(this.value)"></div></div>`;
+ const B=BM[cmpR],yi=S.gross||incM()*12,ys=fcModel().spend*12;
+ const row=(lbl,you,set,upGood)=>{if(!set)return`<p class="mute" style="font-size:14px;margin:6px 0 14px"><b style="color:var(--ink)">${lbl}:</b> no comparable figures for ${B.name}.</p>`;const b=bmFor(set,a);
+  if(!b)return`<p class="mute" style="font-size:14px;margin:6px 0 14px"><b style="color:var(--ink)">${lbl}:</b> no published figure for age ${a} in ${B.name}.</p>`;
+  const mx=Math.max(you,b.v)*1.08||1,d=(you-b.v)/b.v,good=upGood?d>=0:d<=0;
+  return`<div style="margin:4px 0 16px"><div class="top"><b>${lbl}</b>${you?`<b class="${Math.abs(d)<.05?"":good?"ok":"warn"}">${Math.abs(d)<.05?"About the same":d>=1?(you/b.v).toFixed(1)+" times higher":Math.abs(Math.round(d*100))+"% "+(d>0?"higher":"lower")}</b>`:`<span>No data yet</span>`}</div>
+  <div class="cmpb"><span>You</span><div class="bar"><i class="blue" style="width:${you/mx*100}%"></i></div><b>${kf(you)}</b></div>
+  <div class="cmpb"><span>${set.all&&!set.hh?"Typical person":set.hh?"Avg household":"Median"}, ${grpL(b,set)}</span><div class="bar"><i class="gray" style="width:${b.v/mx*100}%"></i></div><b>${kf(b.v)}</b></div>
+  <p class="mute" style="font-size:12px;margin:4px 0 0">${esc(set.src)}.</p></div>`};
+ return`<div class="card"><h3>How you compare <small>age ${a}</small></h3><div class="seg sm">${Object.entries(BM).map(([k,v])=>`<button aria-pressed="${cmpR==k}" onclick="cmpR='${k}';render()">${k=="NA"?"N. America":v.name}</button>`).join("")}</div>
+ ${row("Yearly income",yi,B.inc,1)}${row("Yearly spending",ys,B.sp,0)}
+ <p class="mute" style="font-size:13px;margin:0">Your income is ${S.gross?"the before-tax figure you entered":"your logged earnings for a year, which may be after tax, while these figures are before tax. Add your before-tax income below for a fairer comparison"}. Spending figures are for whole households, often 2 to 3 people.</p>${det}</div>`}
+function cashFlow(spent,mn){const e=incIn(ym).reduce((s,t)=>s+t.base,0),mi=incM(),f=fcModel();
+ if(!e&&!mi)return`<p class="empty" style="margin:0">Log your pay (tap +, then Earning) to see what you earn, spend and keep each month.</p>`;const kept=e-spent;
+ return`<div class="stat"><div><small>Earned</small><b>${m0(e)}</b></div><div><small>Spent</small><b>${m0(spent)}</b></div><div><small>Kept</small><b class="${kept<0?"over":"ok"}">${kept<0?"−":""}${m0(Math.abs(kept))}</b></div></div>${mi?`<p class="mute" style="font-size:14px;margin:10px 0 0">In a typical month you earn ${m0(mi)} and spend ${m0(f.spend)}, a saving rate of <b class="${mi-f.spend<0?"over":"ok"}">${Math.round((mi-f.spend)/mi*100)}%</b>.</p>`:""}`}
+const spSeg=()=>`<div class="seg"><button aria-pressed="${ssub!="inc"}" onclick="ssub='sp';render()">Spending</button><button aria-pressed="${ssub=="inc"}" onclick="ssub='inc';render()">Earnings</button></div>`;
+function incView(){const[y,m]=ym.split("-").map(Number),mn=new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long"}),it=incIn(ym),tot=it.reduce((s,t)=>s+t.base,0),by={};it.forEach(t=>by[t.cat]=(by[t.cat]||0)+t.base);
+ const sp=items(ym).reduce((s,t)=>s+t.base,0),net=tot-sp,today=ld(new Date()),end=ld(new Date(y,m,0)),far=ld(new Date(Date.now()+400*864e5));
+ let h=`<section class="hero"><div class="big">${m0(tot)}</div><p>Earned in ${mn}.${tot||sp?` After ${m0(sp)} of spending, you ${net>=0?"kept":"are short"} <b class="${net>=0?"ok":"over"}">${m0(Math.abs(net))}</b>.`:""}</p></section>`;
+ if(tot)h+=`<div class="card"><h3>By type</h3>${Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`<div class="top" style="margin:10px 0 6px"><span>${esc(c)}</span><span>${m0(v)}</span></div><div class="bar"><i class="blue" style="width:${v/tot*100}%"></i></div>`).join("")}</div>`;
+ const line=t=>{const a=acc(t.acct);let meta=`${esc(t.cat)}, ${esc(a.name)}, `;
+  if(t.rec){const c=payDates(t,ym+"-01",end).length,nx=payDates(t,today,far)[0];meta+=`${FL[t.rec].toLowerCase()}, about ${m0(cv(t.amt,a.cur)*F[t.rec])} a month. ${c} payday${c==1?"":"s"} in ${mn}${nx?`, next ${nd(nx)}`:""}`}else meta+=nd(t.date);
+  return`<div class="tx"><div><span class="n">${esc(t.note||t.cat)}</span><small>${meta}</small></div><b class="ok">+${fm(t.amt,a.cur)}</b><button class="x" aria-label="Delete earning" onclick="delInc(${t.id})">×</button></div>`};
+ const rec=S.inc.filter(t=>t.rec&&t.date<=end),one=S.inc.filter(t=>!t.rec&&t.date.startsWith(ym)).sort((a,b)=>b.date.localeCompare(a.date));
+ h+=`<h2>Regular pay</h2>`+(rec.length?rec.map(line).join(""):`<div class="empty">No regular pay yet. Add your salary with its pay schedule: weekly, bi-weekly, semi-monthly or monthly.</div>`);
+ h+=`<h2>Other earnings in ${mn}</h2>`+(one.length?one.map(line).join(""):`<div class="empty">None yet. Add things like items you sold, a tax refund or a bonus.</div>`);
+ return h+`<button class="btn" onclick="openSheet('i')">Add earning</button>`}
+function setKind(k){KIND=k;const i=k=="i";$("#kx").setAttribute("aria-pressed",!i);$("#ki").setAttribute("aria-pressed",i);
+ $("#c").innerHTML=(i?ICAT:Object.keys(BUD)).map(c=>`<option>${c}</option>`).join("");
+ $("#r").innerHTML=RX.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
+ $("#r").value=i?"biweekly":"";rTouched=false;
+ $("#n").placeholder=i?"From where? e.g. employer, Marketplace":"What was it for?";$("#sv").textContent=i?"Save earning":"Save expense";
+ $("#rl").firstChild.textContent=i?"Pay schedule":"Repeats";$("#scanb").hidden=i||!SCANOK;$("#sm").textContent="";$("#sheet").setAttribute("aria-label",i?"Add earning":"Add expense")}
+function addInc(){const amt=parseFloat($("#a").value);if(!(amt>0)){$("#a").style.borderColor="var(--red)";return $("#a").focus()}$("#a").style.borderColor="";
+ const date=$("#d").value||ld(new Date()),a=acc($("#ac").value),rec=$("#r").value;
+ S.inc.push({id:Date.now(),amt,acct:a.id,cat:$("#c").value,note:$("#n").value.trim(),date,rec});
+ a.bal+=a.type=="credit"?-amt:amt;save();ym=date.slice(0,7);tab="spend";ssub="inc";note=rec?`Earning saved, paid ${FL[rec].toLowerCase()}.`:"Earning saved.";closeSheet();render()}
+function delInc(id){const t=S.inc.find(x=>x.id==id);if(!t)return;const a=acc(t.acct);a.bal-=a.type=="credit"?-t.amt:t.amt;S.inc=S.inc.filter(x=>x.id!=id);save();render()}
 function fcModel(){
  const now=new Date(),cur=ld(now).slice(0,7),back=ld(new Date(now.getFullYear(),now.getMonth()-3,1)).slice(0,7);
  const cash0=S.accts.filter(a=>a.type=="cash").reduce((s,a)=>s+cv(a.bal,a.cur),0),owed=S.accts.filter(a=>a.type=="credit").reduce((s,a)=>s+cv(a.bal,a.cur),0);
@@ -179,7 +251,7 @@ function fcModel(){
  const ks=Object.keys(mo),hist=ks.length;let one;
  if(hist)one=ks.reduce((s,k)=>s+mo[k],0)/hist;
  else{const d=now.getDate(),dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(),c=S.tx.filter(t=>!t.rec&&t.date.startsWith(cur)).reduce((s,t)=>s+cv(t.amt,acc(t.acct).cur),0);one=d>=3?c/d*dim:0}
- const spend=rec+one,r=S.ret/1200,c=S.contrib,net=S.income-spend-c;
+ const spend=rec+one,r=S.ret/1200,c=S.contrib,net=incM()-spend-c;
  const at=m=>{const g=Math.pow(1+r,m),inv=inv0*g+c*(r?(g-1)/r:m),cash=cash0+net*m;const ast=S.assets.reduce((s,a)=>s+astAt(a,m),0);return{cash,inv,ast,nw:cash+inv+ast-owed}};
  return{at,rec,one,spend,net,hist,cash0,owed}}
 function chart(f){const pts=[];for(let m=0;m<=60;m+=2)pts.push(f.at(m).nw);const mn=Math.min(...pts),mx=Math.max(...pts),sp=(mx-mn)||1,X=i=>i/(pts.length-1)*300+10,Y=v=>110-(v-mn)/sp*100;
@@ -192,7 +264,7 @@ function fcView(){const sg=fSeg();if(fsub=="var")return varView();const f=fcMode
  h+=`<div class="card">${chart(f)}</div>`;
  h+=[["1 week",7/30.44],["1 month",1],["6 months",6],["1 year",12],["5 years",60]].map(([l,m])=>{const p=f.at(m);return`<div class="row"><div class="top"><b>${l}</b><b class="${p.nw<0?"over":""}">${m0(p.nw)}</b></div><div class="top" style="margin:0"><span>Cash ${m0(p.cash)}</span><span>Investments ${m0(p.inv)}</span></div><div class="top" style="margin:0"><span>Assets ${m0(p.ast)}</span><span>Liquid ${m0(p.nw-p.ast)}</span></div></div>`}).join("");
  h+=`<div class="card" style="margin-top:12px"><h3>Assumptions</h3><p class="mute" style="margin:0 0 8px;font-size:14px">From your history you spend about ${m0(f.spend)} a month: ${m0(f.rec)} recurring plus ${m0(f.one)} of one-time spending. Card balances are held at ${m0(f.owed)}. Forecasts are estimates, not guarantees or financial advice.</p>
- <div class="bud"><label for="fi">Monthly income (CAD)</label><input id="fi" type="number" inputmode="decimal" min="0" value="${S.income}" onchange="setFc('income',this.value)"></div>
+ ${S.inc.length?`<p style="font-size:15px;margin:0 0 8px">Monthly income from your earnings: <b>${m0(incM())}</b> <span class="mute">(regular pay, plus other earnings averaged over the past year)</span></p>`:`<div class="bud"><label for="fi">Monthly income (CAD)</label><input id="fi" type="number" inputmode="decimal" min="0" value="${S.income}" onchange="setFc('income',this.value)"></div><p class="mute" style="font-size:13px;margin:0 0 6px">Or log your pay (tap +, then Earning) for a more accurate forecast.</p>`}
  <div class="bud"><label for="fc">Invest each month (CAD)</label><input id="fc" type="number" inputmode="decimal" min="0" value="${S.contrib}" onchange="setFc('contrib',this.value)"></div>
  <div class="bud"><label for="fr">Yearly investment return (%)</label><input id="fr" type="number" inputmode="decimal" step="0.5" value="${S.ret}" onchange="setFc('ret',this.value)"></div></div>`;
  return h}
@@ -250,6 +322,7 @@ function varView(){
 const ratesNote=()=>{if(LIVE.at)return`Live rates from Twelve Data, updated ${new Date(LIVE.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}. Tap Refresh to update.`;const d=Math.floor((Date.now()-new Date(S.ratesAt+"T00:00"))/864e5);return `Rates are from ${S.ratesAt}${d>0?`, ${d} day${d>1?"s":""} ago`:""}. They don't update on their own, so edit them in Accounts or ask Claude for a refresh.`};
 function astAt(a,m){const v=cv(a.value,a.cur);if(!a.life)return v;const rem=a.life-Math.max(0,(Date.now()-new Date(a.date+"T00:00"))/(365.25*864e5));return rem<=0?0:v*Math.max(0,1-m/12/rem)}
 const HOST=!!window.claude,liveOk=()=>!!MCP||(!HOST&&(!!S.tdKey||!!S.avKey||!!S.gmKey||!!S.gqKey)),gmOk=()=>!HOST&&(!!S.gqKey||!!S.gmKey),PN=()=>S.gqKey?"Groq":"Gemini",isTSX=x=>/\.(TO|V)$/i.test(x);
+let KIND="x",SCANOK=false,rTouched=false,ssub="sp",cmpR="CA";
 let SAM=null,rcpt=null,MCP=null,LIVE={at:null,busy:false,err:"",fail:[],prog:""};
 const liveBar=()=>{let h="";if(LIVE.busy&&LIVE.prog)h+=`<div class="banner" role="status">${esc(LIVE.prog)}</div>`;if(LIVE.err)h+=`<div class="banner" role="alert">${esc(LIVE.err)}</div>`;if(LIVE.fail.length)h+=`<div class="banner" role="status">Couldn't update ${esc(LIVE.fail.join(", "))}. The last saved values are kept.</div>`;return h};
 const mcpMsg=e=>({server_not_connected:"Twelve Data isn't connected. Connect it in Claude's settings, then tap Refresh.",needs_reauth:"Twelve Data needs you to sign in again in Claude's settings.",not_in_manifest:"This page isn't allowed to use Twelve Data for this viewer.",blocked_by_policy:"Twelve Data is blocked by your organization's policy.",approval_required:"Twelve Data needs your approval. Tap Refresh and accept the prompt.",server_unavailable:"Twelve Data didn't answer in time. Tap Refresh to try again.",rate_limited:"Twelve Data's free limit was reached. Wait a minute, then tap Refresh.",credits:"Twelve Data's free limit was reached. Wait a minute, then tap Refresh.",bad_key:"Twelve Data didn't accept your API key. Check it in Accounts.",bad_key_av:"Alpha Vantage didn't accept your API key. Check it in Accounts.",offline:"Couldn't reach Twelve Data. Check your connection, then tap Refresh.",tool_error:"Twelve Data reported an error: "+(e&&e.message||"try again later.")}[e&&e.code]||"Couldn't reach Twelve Data. Tap Refresh to try again.");
@@ -270,14 +343,14 @@ async function avNum(sym){const gap=1500-(Date.now()-avLast);if(gap>0)await wait
  try{j=await(await fetch("https://www.alphavantage.co/query?"+q)).json()}catch(e){throw{code:"offline"}}
  if(j&&(j.Information||j.Note)){if(/api key|apikey|invalid/i.test(j.Information||j.Note)&&!/rate|limit|per day/i.test(j.Information||j.Note))throw{code:"bad_key_av"};throw{code:"av_limit"}}
  const v=+((j&&j["Global Quote"]||{})["05. price"]);if(!(v>0))throw{code:"bad_symbol"};return v}
-const QS=["Where am I overspending?","Can I afford $500 this month?","Eating out last month","When will I reach $100,000?","Best GIC rates in Canada today","Market news this morning"];
+const QS=["How much did I earn last month?","How do I compare to people my age?","Where am I overspending?","Can I afford $500 this month?","Eating out last month","When will I reach $100,000?","Best GIC rates in Canada today","Market news this morning"];
 const aiMsg=e=>({bad_key_gm:`${PN()} didn't accept your API key. Check it in Accounts.`,gm_limit:`${PN()}'s free limit was reached. Try again in a minute.`,gm_minute:`${PN()}'s free plan allows only a few requests a minute. Try again in about a minute.`,gm_day:`Today's free ${PN()} limit is used up. It resets overnight.`,gm_nosearch:`Your ${PN()} key can't search the web right now, so it can't look up live prices or today's news.`,offline:`Couldn't reach ${PN()}. Check your connection.`,no_ai:"I can answer questions about your own money here. For general questions, rates and news, add a free Groq key on the Accounts tab.",not_granted:"The assistant needs your permission to ask Claude."}[e&&e.code]||"The assistant couldn't answer. Try again.");
 const askOk=()=>!HOST||!!SAMT;
 function finSummary(){
  const cur=ld(new Date()).slice(0,7),it=items(cur),by={};it.forEach(t=>by[t.cat]=(by[t.cat]||0)+t.base);
  const cash=S.accts.filter(a=>a.type=="cash").reduce((s,a)=>s+cv(a.bal,a.cur),0),cards=S.accts.filter(a=>a.type=="credit"),owed=cards.reduce((s,a)=>s+cv(a.bal,a.cur),0),lim=cards.reduce((s,a)=>s+cv(a.limit,a.cur),0);
  const inv=S.inv.reduce((s,h)=>s+cv(h.qty*h.price,h.cur),0),ast=S.assets.reduce((s,a)=>s+cv(a.value,a.cur),0),r=n=>Math.round(n);
- return`All figures in CAD. Net worth ${r(cash+inv+ast-owed)} (cash ${r(cash)}, investments ${r(inv)}, other assets ${r(ast)}, card debt ${r(owed)}${lim?`, card utilization ${r(owed/lim*100)}%`:""}). Monthly income ${S.income?r(S.income):"not set"}. This month's spending so far ${r(it.reduce((s,t)=>s+t.base,0))} vs budget ${r(Object.values(S.budgets).reduce((a,b)=>a+b,0))}: ${Object.entries(by).map(([c,v])=>`${c} ${r(v)} of ${r(S.budgets[c])}`).join(", ")||"nothing yet"}. Currencies held: ${[...new Set(S.accts.map(a=>a.cur))].join(", ")}. Holdings: ${S.inv.map(h=>`${h.sym} x${h.qty}`).join(", ")||"none"}.`}
+ return`All figures in CAD. Net worth ${r(cash+inv+ast-owed)} (cash ${r(cash)}, investments ${r(inv)}, other assets ${r(ast)}, card debt ${r(owed)}${lim?`, card utilization ${r(owed/lim*100)}%`:""}). Monthly income ${incM()?r(incM()):"not set"}. This month's spending so far ${r(it.reduce((s,t)=>s+t.base,0))} vs budget ${r(Object.values(S.budgets).reduce((a,b)=>a+b,0))}: ${Object.entries(by).map(([c,v])=>`${c} ${r(v)} of ${r(S.budgets[c])}`).join(", ")||"nothing yet"}. Currencies held: ${[...new Set(S.accts.map(a=>a.cur))].join(", ")}. Holdings: ${S.inv.map(h=>`${h.sym} x${h.qty}`).join(", ")||"none"}.`}
 const sysP=()=>`You are the finance assistant inside Pocket Budget, a private budgeting app for a user in Canada. Today is ${new Date().toDateString()}. Search the web for anything current, like rates, prices, news, GIC rates and credit card offers, and prefer Canadian sources and products. Write for a phone screen: short paragraphs or short "- " bullet lists, under 180 words unless asked for more. Give specific names and numbers, and say when rates were last seen. For credit cards, match them to the user's credit score; if you don't know it, ask for it in one short question. You are not a financial advisor: give facts and options, suggest confirming rates with the provider, and never promise returns.${S.aiShare?" The user's current numbers: "+finSummary():""}`;
 const GM_MODELS=["gemini-flash-latest","gemini-flash-lite-latest","gemini-2.5-flash","gemini-2.5-flash-lite"];
 async function gemCall(m,contents,sys,search){let res;
@@ -354,7 +427,18 @@ const pctS=(a,b)=>b?Math.round(a/b*100)+"%":"n/a";
 function agent(raw){const q=" "+raw.toLowerCase().replace(/[’']/g,"'")+" ";
  if(/\b(gic|news|market (news|update)|tsx today|s&p|dow|best .*(card|account|bank|rate)|recommend .*(card|bank)|which (card|bank)|interest rates? (today|now)|mortgage rates?|prime rate|bank of canada|inflation|weather)\b/.test(q)&&!/\bmy\b.*\b(card|balance|utili)/.test(q))return null;
  const T=aTot(),M=aMonth(),f=fcModel();
- if(/^ *(help|hi|hello|hey)\b|what can you (do|answer)|how do you work/.test(q))return"I can answer questions about your own money from the data in this app, for example:\n- How much did I spend on groceries last month?\n- Can I afford $400 this month?\n- Where am I overspending?\n- What's my net worth, and what will it be in 5 years?\n- When will I reach $50,000?\n- How many months could I live on my savings?\n- What are my subscriptions and recurring bills?\n- How are my investments doing?\n- How much should I pay down my credit card?";
+ if(/people my age|my age group|for my age|how do i compare|compare (me|myself)\b|(compared?|vs\.?) (to |with )?(others|other people|people|my peers|the average (person|canadian))|my peers|average (person|canadian|torontonian|american) (my age|earns?|spends?|makes?)|am i (rich|poor|normal|average|behind|ahead)/.test(q)){const a=age();if(!a)return"Add your birth year in the \"How you compare\" card on the Overview tab, and I can compare you with people your age.";
+  const yi=S.gross||incM()*12,ys=f.spend*12,pc=(y,b)=>y>=2*b.v?`${(y/b.v).toFixed(1)} times`:`${Math.abs(Math.round((y-b.v)/b.v*100))}% ${y>=b.v?"above":"below"}`;
+  return`You're ${a}, with about ${m0(yi)} a year in ${S.gross?"before-tax income":"logged earnings"} and ${m0(ys)} a year in spending.\n`+Object.values(BM).map(B=>{const bi=bmFor(B.inc,a),bs=bmFor(B.sp,a);return`- **${B.name}:** income ${bi&&yi?pc(yi,bi)+(B.inc.all?" the world median":" the median for your age"):"has no figure for your age"}; spending ${bs&&ys?pc(ys,bs)+" the average household":"has no comparable figure"}.`}).join("\n")+`\n\nSee "How you compare" on the Overview tab for the sources.`}
+ if(/\b(next|when).{0,20}(pay ?day|get paid|paid|paycheque|paycheck)/.test(q)){const today=ld(new Date()),far=ld(new Date(Date.now()+400*864e5)),nx=S.inc.filter(t=>t.rec).map(t=>({t,d:payDates(t,today,far)[0]})).filter(x=>x.d).sort((a,b)=>a.d.localeCompare(b.d));
+  if(!nx.length)return"You don't have regular pay logged yet. Tap +, choose Earning, and pick your pay schedule.";
+  return`Your next payday is **${nd(nx[0].d)}**: ${esc0(nx[0].t.note||nx[0].t.cat)}, ${fm(nx[0].t.amt,acc(nx[0].t.acct).cur,2)}.`+(nx.length>1?"\n"+nx.slice(1,4).map(x=>`- Then ${nd(x.d)}: ${esc0(x.t.note||x.t.cat)}, ${fm(x.t.amt,acc(x.t.acct).cur,2)}`).join("\n"):"")}
+ if(/\b(earn|earned|earning|earnings|income|salary|wages?|make|made|paid me|tax refund|tax return|side income|sold)\b/.test(q)&&!/spen[dt]|afford|sav(e|ing)|reach|worth|compare/.test(q)){
+  if(!S.inc.length)return incM()?`Your monthly income is set to ${m0(incM())} on the Forecast tab. Log your pay (tap +, then Earning) to track what you actually receive.`:"You haven't logged any earnings yet. Tap +, choose Earning, and add your salary, a tax refund or money from selling things.";
+  const IM={Salary:/salary|paycheque|paycheck|wages?/,"Side income":/side (income|hustle|gig)|freelanc/,"Sold items":/\bsold\b|selling|second.?hand|marketplace|kijiji/,"Tax refund":/tax (refund|return)/,"Government benefits":/benefit|\bccb\b|gst credit|\bei\b/,"Investment income":/dividend|interest income|investment income/,Gift:/\bgifts?\b/};
+  const P=aPer(q),it=P.ks.flatMap(k=>incIn(k)),ic=Object.keys(IM).filter(c=>IM[c].test(q)),t=ic.length?it.filter(x=>ic.includes(x.cat)):it,v=t.reduce((s,x)=>s+x.base,0),by={};t.forEach(x=>by[x.cat]=(by[x.cat]||0)+x.base);
+  return`You earned **${m0(v)}**${ic.length?` from ${ic.join(" and ").toLowerCase()}`:""} ${P.l}.`+(Object.keys(by).length>1?"\n"+Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([c,x])=>`- ${c}: ${m0(x)}`).join("\n"):"")+(ic.length?"":`\n\nIn a typical month you bring in about ${m0(incM())}, including ${m0(incRecM())} of regular pay.`)}
+ if(/^ *(help|hi|hello|hey)\b|what can you (do|answer)|how do you work/.test(q))return"I can answer questions about your own money from the data in this app, for example:\n- How much did I spend on groceries last month?\n- How much did I earn last month? When is my next payday?\n- How do I compare to people my age?\n- Can I afford $400 this month?\n- Where am I overspending?\n- What's my net worth, and what will it be in 5 years?\n- When will I reach $50,000?\n- How many months could I live on my savings?\n- What are my subscriptions and recurring bills?\n- How are my investments doing?\n- How much should I pay down my credit card?";
  if(/afford|can i (buy|spend|get)|should i (buy|spend)/.test(q)){const a=aAmt(q);if(!a)return"How much is it? Ask like \"Can I afford $400 this month?\"";
   const cats=aCats(q),c=cats[0],cl=c?S.budgets[c]-(M.by[c]||0):null,after=M.left-a,cashAfter=T.cash-a,mo=Math.max(f.spend,1);
   let t=`**${after>=0&&(cl==null||cl>=a)?"Yes, it fits":"It doesn't fit your budget"}** ${after>=0&&(cl==null||cl>=a)?"this month.":"this month."}\n- Budget left this month: ${m0(M.left)}. After ${m0(a)}: ${m0(after)}.`;
@@ -372,7 +456,7 @@ function agent(raw){const q=" "+raw.toLowerCase().replace(/[’']/g,"'")+" ";
   const dl=M.dim-M.d+1;return`You have **${m0(M.left)}** left in this month's budget${M.left>0?`, about ${m0(M.left/dl)} a day for the remaining ${dl} days`:""}. You've spent ${m0(M.spent)} of ${m0(M.bud)}.`}
  if(/subscri|recurring|regular (bills|payments)|fixed costs|monthly bills/.test(q)){const sub=/subscri/.test(q)&&!/recurring|bills/.test(q),r=S.tx.filter(t=>t.rec&&(!sub||t.cat=="Subscriptions"));if(sub&&!r.length)return"You don't have any recurring subscriptions logged. Add them as monthly expenses in the Subscriptions category.";if(!r.length)return"You don't have any recurring expenses logged. Mark an expense as weekly, monthly or yearly when you add it.";
   const mo=t=>cv(t.amt,acc(t.acct).cur)*F[t.rec],tot=r.reduce((s,t)=>s+mo(t),0);
-  return`**${sub?"Subscriptions":"Recurring costs"}: ${m0(tot)} a month (${m0(tot*12)} a year).**\n`+r.sort((a,b)=>mo(b)-mo(a)).slice(0,10).map(t=>`- ${esc0(t.note||t.cat)}: ${fm(t.amt,acc(t.acct).cur,2)} ${t.rec} (${m0(mo(t))}/month)`).join("\n")}
+  return`**${sub?"Subscriptions":"Recurring costs"}: ${m0(tot)} a month (${m0(tot*12)} a year).**\n`+r.sort((a,b)=>mo(b)-mo(a)).slice(0,10).map(t=>`- ${esc0(t.note||t.cat)}: ${fm(t.amt,acc(t.acct).cur,2)} ${FL[t.rec].toLowerCase()} (${m0(mo(t))}/month)`).join("\n")}
  if(/biggest|largest|most expensive|top (expenses|purchases|spending)/.test(q)){const P=aPer(q),list=P.ks.flatMap(k=>items(k)).filter(t=>!t.rec).sort((a,b)=>b.base-a.base).slice(0,5);
   if(!list.length)return`No one-time expenses logged for ${P.l}.`;return`**Biggest one-time expenses, ${P.l}:**\n`+list.map(t=>`- ${esc0(t.note||t.cat)} (${t.cat}), ${t.date}: ${m0(t.base)}`).join("\n")}
  if(/compare|more than last|less than last|vs\.? last|versus last|last month vs|than usual|trend/.test(q)){const n=new Date(),ks=[0,1,2,3].map(i=>ld(new Date(n.getFullYear(),n.getMonth()-i,1)).slice(0,7)),v=ks.map(k=>items(k).reduce((s,t)=>s+t.base,0)),avg=(v[1]+v[2]+v[3])/3;
@@ -385,14 +469,14 @@ function agent(raw){const q=" "+raw.toLowerCase().replace(/[’']/g,"'")+" ";
   return`You spent **${m0(v)}** ${P.l}.`+(v?"\n"+Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([c,x])=>`- ${c}: ${m0(x)} (${pctS(x,v)})`).join("\n"):"")}
  if(/when will i|how long (until|till|to reach|to save|before)|reach \$|hit \$|get to \$/.test(q)){const a=aAmt(q);if(!a)return"What amount? Ask like \"When will I reach $100,000?\"";
   const liq=/liquid|cash|savings?/.test(q),val=m=>{const p=f.at(m);return liq?p.nw-p.ast:p.nw},now=val(0);if(now>=a)return`You're already there: ${liq?"liquid net worth":"net worth"} is ${m0(now)}.`;
-  for(let m=1;m<=600;m++)if(val(m)>=a){const d=new Date();d.setMonth(d.getMonth()+m);return`At your current pace, you'd reach **${m0(a)}** in about **${m>=24?(m/12).toFixed(1)+" years":m+" months"}** (around ${d.toLocaleDateString(undefined,{month:"long",year:"numeric"})}).\n\nThis assumes income of ${m0(S.income)} a month, spending of about ${m0(f.spend)}, investing ${m0(S.contrib)} a month at ${S.ret}% a year. Change these on the Forecast tab.`}
-  return`At your current pace you wouldn't reach ${m0(a)} within 50 years. ${S.income?`You're ${f.net<0?"spending more than you earn":"saving about "+m0(f.net+S.contrib)+" a month"}.`:"Add your monthly income on the Forecast tab so I can project this."}`}
+  for(let m=1;m<=600;m++)if(val(m)>=a){const d=new Date();d.setMonth(d.getMonth()+m);return`At your current pace, you'd reach **${m0(a)}** in about **${m>=24?(m/12).toFixed(1)+" years":m+" months"}** (around ${d.toLocaleDateString(undefined,{month:"long",year:"numeric"})}).\n\nThis assumes income of ${m0(incM())} a month, spending of about ${m0(f.spend)}, investing ${m0(S.contrib)} a month at ${S.ret}% a year. Change these on the Forecast tab.`}
+  return`At your current pace you wouldn't reach ${m0(a)} within 50 years. ${incM()?`You're ${f.net<0?"spending more than you earn":"saving about "+m0(f.net+S.contrib)+" a month"}.`:"Log your pay (tap +, then Earning) so I can project this."}`}
  if(/in (\d+|one|two|three|five|ten) (years?|months?)|forecast|project(ion|ed)?|will (my|i) (have|be worth)|future/.test(q)&&!/spen/.test(q)){const w=q.match(/in (\d+|one|two|three|five|ten) (years?|months?)/),N=w?({one:1,two:2,three:3,five:5,ten:10}[w[1]]||+w[1]):5,mo=w&&/month/.test(w[2])?N:N*12,p=f.at(mo);
   return`In ${w?w[1]+" "+w[2]:"5 years"}, your net worth could be about **${m0(p.nw)}**:\n- Cash: ${m0(p.cash)}\n- Investments: ${m0(p.inv)}\n- Other assets: ${m0(p.ast)}\n\nBased on your recent spending and the assumptions on the Forecast tab. It's an estimate, not a guarantee.`}
  if(/emergency|how long (could|can|would) (i|my)|months of (expenses|spending)|runway|live on my savings|lose my job/.test(q)){const mo=Math.max(f.spend,1),n=T.cash/mo;
   return`Your cash (${m0(T.cash)}) would cover about **${n.toFixed(1)} months** of your usual spending (${m0(mo)} a month).${n<3?" A common guideline is 3 to 6 months, so building this up would help.":n<6?" That's within the common 3 to 6 month guideline.":" That's above the common 3 to 6 month guideline."}`}
- if(/sav(e|ing)s? rate|how much (am i|do i|i'm) sav|am i saving|saving enough/.test(q)){if(!S.income)return"Add your monthly income on the Forecast tab, and I can work out your saving rate.";const sv=S.income-f.spend;
-  return`You earn ${m0(S.income)} a month and spend about ${m0(f.spend)}, so you save about **${m0(sv)} a month (${pctS(sv,S.income)})**.${sv<0?" You're spending more than you earn.":sv/S.income<.1?" Many guidelines suggest aiming for 10 to 20%.":""}`}
+ if(/sav(e|ing)s? rate|how much (am i|do i|i'm) sav|am i saving|saving enough/.test(q)){if(!incM())return"Log your pay (tap +, then Earning), and I can work out your saving rate.";const sv=incM()-f.spend;
+  return`You earn ${m0(incM())} a month and spend about ${m0(f.spend)}, so you save about **${m0(sv)} a month (${pctS(sv,incM())})**.${sv<0?" You're spending more than you earn.":sv/incM()<.1?" Many guidelines suggest aiming for 10 to 20%.":""}`}
  if(/net worth|worth|how rich|total assets|how much (money )?do i have|what do i own|my money/.test(q)){
   return`Your net worth is **${m0(T.nw)}**.\n- Cash: ${m0(T.cash)}\n- Investments: ${m0(T.inv)}\n- Other assets: ${m0(T.ast)}\n- Card debt: −${m0(T.owed)}\n\nLiquid net worth (without property and vehicles): ${m0(T.liq)}.${S.hist.length>1?" "+nwChange().replace(/<[^>]+>/g,"")+".":""}`}
  if(/credit|utili[sz]ation|card balance|pay (down|off)|my debt|how much do i owe/.test(q)){if(!T.lim)return"Add your credit cards with their limits on the Accounts tab, and I can check your utilization.";const u=T.owed/T.lim;
@@ -402,7 +486,7 @@ function agent(raw){const q=" "+raw.toLowerCase().replace(/[’']/g,"'")+" ";
   return`Your investments are worth **${m0(T.inv)}**, ${g>=0?"up":"down"} ${m0(Math.abs(g))} (${pctS(Math.abs(g),T.invC)}) since you bought.\n`+rows.slice(0,6).map(r=>`- ${r.s}: ${m0(r.v)}, ${r.g>=0?"+":"−"}${m0(Math.abs(r.g))} (${(r.p*100).toFixed(1)}%)`).join("\n")+(rows.length>1?`\n\nBest: ${rows[0].s}. Weakest: ${rows[rows.length-1].s}.`:"")}
  if(/cost per day|per day|daily cost|what does my .* cost/.test(q)&&S.assets.length){return"**What your assets cost per day:**\n"+S.assets.map(a=>`- ${esc0(a.name)}: ${fm(astCalc(a).perDay,"CAD",2)} a day`).join("\n")}
  if(/balance|accounts?|how much cash|in my (bank|account|chequing|checking|savings)/.test(q)){return"**Your accounts:**\n"+S.accts.map(a=>`- ${esc0(a.name)} (${a.type=="credit"?"card, owed":a.cur}): ${fm(a.bal,a.cur,2)}${a.cur!="CAD"?` (${m0(cv(a.bal,a.cur))})`:""}`).join("\n")}
- if(/income|earn|salary|paycheck/.test(q)){return S.income?`Your monthly income is set to ${m0(S.income)} (${m0(S.income*12)} a year). Change it on the Forecast tab.`:"Your income isn't set yet. Add it on the Forecast tab."}
+ if(/income|earn|salary|paycheck/.test(q)){return incM()?`Your monthly income is set to ${m0(incM())} (${m0(incM()*12)} a year). Change it on the Forecast tab.`:"Your income isn't set yet. Add it on the Forecast tab."}
  return null}
 const esc0=x=>String(x).replace(/[*_\[\]]/g,"");
 
@@ -531,10 +615,11 @@ function nwChart(){
  <text x="338" y="22" font-size="11" text-anchor="end">${kf(hi-pad)}</text><text x="338" y="118" font-size="11" text-anchor="end">${kf(lo+pad)}</text></svg>`}
 function scrub(e){const g=e.target.closest&&e.target.closest("#nwsvg");if(!g||!CH.length)return;const r=g.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*340;let b=CH[0];CH.forEach(p=>{if(Math.abs(p.x-x)<Math.abs(b.x-x))b=p});
  const d=$("#sdot"),l=$("#sline");d.setAttribute("cx",b.x);d.setAttribute("cy",b.y);l.setAttribute("x1",b.x);l.setAttribute("x2",b.x);$("#scrub").textContent=b.s}
-function barChart(a,bud){const mx=Math.max(bud,...a.map(x=>x.v),1)*1.15,w=340/a.length,bw=w*.5,Y=v=>112-v/mx*96;
- return`<svg viewBox="0 0 340 140" role="img" aria-label="Spending over the last six months" style="width:100%;height:auto;display:block">
+function barChart(a,bud){const mx=Math.max(bud,...a.map(x=>x.v),...a.map(x=>x.e||0),1)*1.15,w=340/a.length,bw=w*.5,Y=v=>112-v/mx*96;
+ return`<svg viewBox="0 0 340 140" role="img" aria-label="Spending and earnings over the last six months" style="width:100%;height:auto;display:block">
  ${a.map((x,i)=>{const cx=i*w+w/2,last=i==a.length-1,over=bud&&x.v>bud;return`<rect x="${cx-bw/2}" y="${Y(x.v)}" width="${bw}" height="${Math.max(112-Y(x.v),x.v?3:0)}" rx="6" fill="${over?"var(--gfx-r)":"var(--acc)"}" opacity="${last?1:.4}"/><text x="${cx}" y="${Y(x.v)-6}" font-size="11" text-anchor="middle" ${last?'style="fill:var(--ink);font-weight:600"':""}>${x.v?kf(x.v):""}</text><text x="${cx}" y="132" font-size="12" text-anchor="middle" ${last?'style="fill:var(--ink);font-weight:600"':""}>${x.l}</text>`}).join("")}
- ${bud?`<line x1="0" x2="340" y1="${Y(bud)}" y2="${Y(bud)}" stroke="var(--gfx-o)" stroke-width="1.5" stroke-dasharray="4 4"/><text x="338" y="${Y(bud)-5}" font-size="11" text-anchor="end" style="fill:var(--gfx-o)">Budget</text>`:""}
+ ${a.some(x=>x.e)?`<path d="${a.map((x,i)=>(i?"L":"M")+(i*w+w/2).toFixed(1)+" "+Y(x.e).toFixed(1)).join("")}" fill="none" stroke="var(--gfx-g)" stroke-width="2.5" stroke-linejoin="round"/>${a.map((x,i)=>`<circle cx="${(i*w+w/2).toFixed(1)}" cy="${Y(x.e).toFixed(1)}" r="4" fill="var(--gfx-g)" stroke="var(--surf)" stroke-width="1.5"/>`).join("")}`:""}
+ ${bud?`<line x1="0" x2="340" y1="${Y(bud)}" y2="${Y(bud)}" stroke="var(--gfx-o)" stroke-width="1.5" stroke-dasharray="4 4"/>`:""}
  <line x1="0" x2="340" y1="112.5" y2="112.5" stroke="var(--line)"/></svg>`}
 function donut(by,tot){if(!tot)return`<p class="empty" style="margin:0">Add expenses this month to see your spending by category.</p>`;
  let e=Object.entries(by).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);if(e.length>7)e=[...e.slice(0,6),["Everything else",e.slice(6).reduce((s,x)=>s+x[1],0)]];
@@ -585,10 +670,10 @@ function draw(){
  if(locked)return lockView();
  const NW=cash+inv-owed+ast;snap(NW);
  const ic=(d,l,f,c)=>`<button ${c?`class="${c}"`:""} aria-label="${l}" onclick="${f}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg></button>`;
- let h=`<div class="hd"><h1>${{over:"Overview",spend:"Spending",fc:"Forecast",inv:"Wealth",acc:"Accounts"}[tab]}</h1><div class="ib">${liveOk()?ic("M21 12a9 9 0 11-2.6-6.4M21 4v5h-5",LIVE.busy?"Updating":"Refresh live data","refreshLive(true)",LIVE.busy?"spin":""):""}${ic(priv?"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM4 4l16 16":"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z",priv?"Show amounts":"Hide amounts","togglePriv()")}${askOk()?ic("M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z","Ask the assistant","openChat()"):""}${PIN()?ic("M6 11h12v10H6zM9 11V8a3 3 0 016 0v3","Lock","lockNow()"):""}${ic("M12 5v14M5 12h14","Add expense","openSheet()","plus")}</div></div>`+(n?`<div class="banner" role="status">${esc(n)}</div>`:"")+liveBar();
+ let h=`<div class="hd"><h1>${{over:"Overview",spend:ssub=="inc"?"Earnings":"Spending",fc:"Forecast",inv:"Wealth",acc:"Accounts"}[tab]}</h1><div class="ib">${liveOk()?ic("M21 12a9 9 0 11-2.6-6.4M21 4v5h-5",LIVE.busy?"Updating":"Refresh live data","refreshLive(true)",LIVE.busy?"spin":""):""}${ic(priv?"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM4 4l16 16":"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z",priv?"Show amounts":"Hide amounts","togglePriv()")}${askOk()?ic("M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z","Ask the assistant","openChat()"):""}${PIN()?ic("M6 11h12v10H6zM9 11V8a3 3 0 016 0v3","Lock","lockNow()"):""}${ic("M12 5v14M5 12h14","Add expense or earning","openSheet()","plus")}</div></div>`+(n?`<div class="banner" role="status">${esc(n)}</div>`:"")+liveBar();
  if(tab=="over"||tab=="spend")h+=`<div class="months"><button aria-label="Previous month" onclick="shift(-1)">‹</button><b>${new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"})}</b><button aria-label="Next month" onclick="shift(1)">›</button></div>`;
  const al=alertList(ym);if(util>.3)al.push(["amber",`Card utilization is ${Math.round(util*100)}%, above the 30% mark that starts to hurt your score.`]);
- if(tab=="over"||tab=="spend")h+=al.slice(0,4).map(a=>`<div class="alert ${a[0]=="red"?"red":""}" role="alert">${esc(a[1])}</div>`).join("");
+ if(tab=="over"||(tab=="spend"&&ssub!="inc"))h+=al.slice(0,4).map(a=>`<div class="alert ${a[0]=="red"?"red":""}" role="alert">${esc(a[1])}</div>`).join("");
  if(tab=="over"){
   const r=budT?spent/budT:0,tp=[];
   Object.keys(BUD).forEach(c=>{if((by[c]||0)>S.budgets[c])tp.push(`${c} is ${m0(by[c]-S.budgets[c])} over budget. Trim it next month or raise the limit if the budget is unrealistic.`)});
@@ -597,30 +682,31 @@ function draw(){
   if(spent&&recT/spent>.6)tp.push(`${Math.round(recT/spent*100)}% of your spending is recurring, so it's the easiest place to save. Review each recurring bill.`);
   if(util>.3)tp.push(`Card utilization is ${Math.round(util*100)}%. Paying down ${m0(owed-lim*.3)} gets you under 30%.`);
   if(!tp.length)tp.push(spent?"No red flags this month. Keep going.":"Add a few expenses to get suggestions tailored to you.");
-  const r6=[];for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1),k=d.getFullYear()+"-"+p2(d.getMonth()+1);r6.push({k,l:d.toLocaleDateString(undefined,{month:"short"}),v:items(k).reduce((s,t)=>s+t.base,0)})}
+  const r6=[];for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1),k=d.getFullYear()+"-"+p2(d.getMonth()+1);r6.push({k,e:incIn(k).reduce((s,t)=>s+t.base,0),l:d.toLocaleDateString(undefined,{month:"short"}),v:items(k).reduce((s,t)=>s+t.base,0)})}
   const avg=r6.reduce((s,x)=>s+x.v,0)/6,f=fcModel();
   h+=briefCard();
   h+=`<section class="hero"><div class="big ${NW<0?"over":""}">${m0(NW)}</div><p>${nwChange()}</p></section>
   <div class="card"><div class="seg sm">${["1M","6M","1Y","5Y"].map(r=>`<button aria-pressed="${nwR==r}" onclick="nwR='${r}';render()">${r}</button>`).join("")}</div><div class="scrub" id="scrub">Drag across the chart to see values.</div>${nwChart()}<div class="lg" style="grid-template-columns:1fr 1fr"><div><i style="background:var(--acc)"></i><span>History</span></div><div><i style="background:var(--mute)"></i><span>Forecast</span></div></div></div>
-  <div class="card"><h3>Spending <small>6-month avg ${m0(avg)}</small></h3><div class="top"><span>${m0(spent)} this month</span><span>${budT?Math.round(r*100)+"% of "+m0(budT):"No budget set"}</span></div><div class="bar" style="margin-bottom:14px"><i class="${cls(r)}" style="width:${pct(r)}%"></i></div>${barChart(r6,budT)}</div>
+  <div class="card"><h3>Spending <small>6-month avg ${m0(avg)}</small></h3><div class="top"><span>${m0(spent)} this month</span><span>${budT?Math.round(r*100)+"% of "+m0(budT):"No budget set"}</span></div><div class="bar" style="margin-bottom:14px"><i class="${cls(r)}" style="width:${pct(r)}%"></i></div>${barChart(r6,budT)}<div class="lg" style="grid-template-columns:repeat(3,auto);justify-content:start;column-gap:18px"><div><i style="background:var(--acc)"></i><span>Spent</span></div>${r6.some(x=>x.e)?`<div><i style="background:var(--gfx-g)"></i><span>Earned</span></div>`:""}${budT?`<div><i style="background:var(--gfx-o);border-radius:1px;height:3px;width:14px"></i><span>Budget</span></div>`:""}</div></div>
   <div class="card"><h3>Where it went</h3>${donut(by,spent)}</div>
   <div class="card"><h3>What you own</h3>${alloc(cash,inv,ast,owed)}</div>
-  <div class="card"><h3>Cash flow <small>this month</small></h3>${S.income?`<div class="stat"><div><small>Income</small><b>${m0(S.income)}</b></div><div><small>Spending</small><b>${m0(f.spend)}</b></div><div><small>Saving</small><b class="${S.income-f.spend<0?"over":"ok"}">${Math.round((S.income-f.spend)/S.income*100)}%</b></div></div>`:`<p class="empty" style="margin:0">Add your monthly income on the Forecast tab to see your saving rate.</p>`}</div>
+  <div class="card"><h3>Cash flow <small>${new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long"})}</small></h3>${cashFlow(spent)}</div>
+  ${cmpCard()}
   <div class="card"><h3>Recurring vs one-time</h3><div class="bar"><i class="blue" style="width:${spent?recT/spent*100:0}%"></i><i class="alt" style="width:${spent?oneT/spent*100:0}%"></i></div><div class="lg"><div><i style="background:var(--acc)"></i><span>Recurring</span><b>${m0(recT)}</b></div><div><i style="background:var(--gfx-o)"></i><span>One-time</span><b>${m0(oneT)}</b></div></div></div>
   ${askOk()?`<div class="card"><h3>Ask about your money</h3><div class="chips">${QS.map(q=>`<button onclick="openChat(this.textContent)">${esc(q)}</button>`).join("")}</div></div>`:""}
   <div class="card"><h3>Credit score impact</h3>${util==null?`<p class="empty">Add a credit card under Accounts to see how your balances affect your score.</p>`:`<div class="top"><span class="${tier(util)[1]}">${tier(util)[0]}</span><span>${Math.round(util*100)}% utilization</span></div><div class="bar"><i class="${cls(util/.5)}" style="width:${pct(util)}%"></i></div><p class="mute" style="margin:8px 0 0;font-size:14px">Utilization is about a third of a typical credit score. Under 10% helps most, over 30% starts to hurt. This is an estimate, not your actual score.</p>`}</div>
   <div class="card"><h3>Ways to improve</h3>${tp.slice(0,4).map(t=>`<div class="tip">${esc(t)}</div>`).join("")}</div>
-  <div class="card"><h3>In other currencies</h3><div class="g2">${CUR.filter(c=>c!="CAD").map(c=>`<div><small>${c}</small><div><b>${fm(NW/S.rates[c],c,0)}</b></div></div>`).join("")}</div><p class="mute" style="margin:10px 0 0;font-size:13px">${ratesNote()}</p></div>
-  <div class="card"><h3>Export to spreadsheet</h3>${DL||!HOST?`<button class="btn ghost" onclick="exp('tx')">Download spending (CSV)</button><button class="btn ghost" onclick="exp('inv')">Download investments (CSV)</button><button class="btn ghost" onclick="exp('ast')">Download assets (CSV)</button>`:`<p class="empty">Downloads are available when this page is opened in Claude.</p>`}</div>`;
- }else if(tab=="spend"){
-  const line=t=>{const a=acc(t.acct);return`<div class="tx"><div><span class="n">${esc(t.note||t.cat)}</span><small>${esc(t.cat)}, ${esc(a.name)}${t.rec?", "+t.rec:""}, ${t.date.slice(5)}</small></div><b>${fm(t.amt,a.cur)}</b><button class="x" aria-label="Delete expense" onclick="delTx(${t.id})">×</button></div>`};
+  <div class="card"><h3>In other currencies</h3><div class="g2">${CUR.filter(c=>c!="CAD").map(c=>`<div><small>${c}, 1 CAD = ${perCad(c)}</small><div><b>${fm(NW/S.rates[c],c,0)}</b></div></div>`).join("")}</div><p class="mute" style="margin:10px 0 0;font-size:13px">${ratesNote()}</p></div>
+  <div class="card"><h3>Export to spreadsheet</h3>${DL||!HOST?`<button class="btn ghost" onclick="exp('tx')">Download spending (CSV)</button><button class="btn ghost" onclick="exp('inc')">Download earnings (CSV)</button><button class="btn ghost" onclick="exp('inv')">Download investments (CSV)</button><button class="btn ghost" onclick="exp('ast')">Download assets (CSV)</button>`:`<p class="empty">Downloads are available when this page is opened in Claude.</p>`}</div>`;
+ }else if(tab=="spend"){h+=spSeg();if(ssub=="inc"){h+=incView()}else{
+  const line=t=>{const a=acc(t.acct);return`<div class="tx"><div><span class="n">${esc(t.note||t.cat)}</span><small>${esc(t.cat)}, ${esc(a.name)}${t.rec?", "+FL[t.rec].toLowerCase():""}, ${t.date.slice(5)}</small></div><b>${fm(t.amt,a.cur)}</b><button class="x" aria-label="Delete expense" onclick="delTx(${t.id})">×</button></div>`};
   const list=(a,e)=>a.length?a.map(line).join(""):`<div class="empty">${e}</div>`;
   h+=`<div class="card"><div class="top"><span>Needs ${m0(needs)}</span><span>Wants ${m0(wants)}</span></div><div class="bar"><i style="width:${spent?needs/spent*100:0}%"></i><i class="alt" style="width:${spent?wants/spent*100:0}%"></i></div></div>`;
   Object.keys(BUD).forEach(c=>{const s=by[c]||0,b=S.budgets[c],q=b?s/b:(s?2:0);h+=`<div class="row"><div class="top"><span>${esc(c)} <small>${GRP[c]}</small></span><span>${m0(s)} of ${m0(b)}</span></div><div class="bar"><i class="${cls(q)}" style="width:${pct(q)}%"></i></div></div>`});
   h+=`<h2>Recurring</h2>`+list(S.tx.filter(t=>t.rec&&t.date.slice(0,7)<=ym),"No recurring expenses yet. Choose Weekly, Monthly or Yearly when adding one.");
   h+=`<h2>One-time this month</h2>`+list(S.tx.filter(t=>!t.rec&&t.date.startsWith(ym)).sort((a,b)=>b.date.localeCompare(a.date)),"No one-time expenses this month.");
   h+=`<details class="card" style="margin-top:16px"><summary>Monthly budgets (CAD)</summary>${Object.keys(BUD).map(c=>`<div class="bud"><label for="b_${c.replace(" ","")}">${c}</label><input id="b_${c.replace(" ","")}" type="number" inputmode="decimal" min="0" value="${S.budgets[c]}" onchange="setBud('${c}',this.value)"></div>`).join("")}</details>`;
- }else if(tab=="fc"){h+=fcView()}else if(tab=="inv"){
+ }}else if(tab=="fc"){h+=fcView()}else if(tab=="inv"){
   h+=subTabs();if(sub=="ast"){h+=astView()}else{
   const g=inv-invCost;
   h+=`<section class="hero"><div class="big">${m0(inv)}</div><p class="${g>=0?"gain":"loss"}">${g>=0?"Up":"Down"} ${m0(Math.abs(g))}${invCost?" ("+(g/invCost*100).toFixed(1)+"%)":""} since you bought.</p></section>
@@ -630,18 +716,19 @@ function draw(){
  }else{
   h+=S.accts.map(a=>`<div class="card"><div class="top"><b>${esc(a.name)} <small>${a.cur}, ${a.type=="credit"?"credit card":"cash"}</small></b><button class="x" aria-label="Delete account" onclick="delAcct(${a.id})">×</button></div><div class="bud"><label for="bal${a.id}">${a.type=="credit"?"Balance owed":"Balance"}</label><input id="bal${a.id}" type="number" inputmode="decimal" step="any" value="${a.bal.toFixed(2)}" onchange="setBal(${a.id},this.value)"></div><small>${a.cur!="CAD"?"About "+m0(cv(a.bal,a.cur))+". ":""}${a.type=="credit"&&a.limit?"Limit "+fm(a.limit,a.cur,0)+", "+Math.round(a.bal/a.limit*100)+"% used.":""}</small></div>`).join("");
   h+=`<div class="card"><h3>Add an account</h3><input id="an" placeholder="Name, e.g. Euro savings" maxlength="30"><div class="g2"><select id="acu">${CUR.map(c=>`<option>${c}</option>`).join("")}</select><select id="aty"><option value="cash">Cash account</option><option value="credit">Credit card</option></select><input id="ab" type="number" inputmode="decimal" step="any" placeholder="Balance or owed"><input id="al" type="number" inputmode="decimal" placeholder="Card limit"></div><button class="btn" onclick="addAcct()">Add account</button></div>
-  ${privCard()}<div class="card"><h3>Exchange rates</h3><p class="mute" style="margin:0 0 6px;font-size:14px">Value of 1 unit in CAD. ${ratesNote()}</p>${CUR.filter(c=>c!="CAD").map(c=>`<div class="bud"><label for="r${c}">1 ${c} in CAD</label><input id="r${c}" type="number" step="any" min="0" value="${S.rates[c]}" onchange="setRate('${c}',this.value)"></div>`).join("")}</div>`;
+  ${privCard()}<div class="card"><h3>Exchange rates <small>base: 1 CAD</small></h3><p class="mute" style="margin:0 0 6px;font-size:14px">How much of each currency 1 Canadian dollar buys. ${ratesNote()}</p>${CUR.filter(c=>c!="CAD").map(c=>`<div class="bud"><label for="r${c}">1 CAD =</label><span style="display:flex;align-items:center;gap:8px"><input id="r${c}" type="number" step="any" min="0" value="${perCad(c)}" onchange="setRate('${c}',this.value)"><b style="width:40px">${c}</b></span></div>`).join("")}</div>`;
  }
  const I={over:"M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10",spend:"M4 20V10M10 20V4M16 20v-7M22 20H2",inv:"M3 17l6-6 4 4 8-8M15 7h6v6",acc:"M3 7h18v12H3zM3 7l2-3h14l2 3M16 13h2",fc:"M12 7v5l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z"};
  const nb=(k,l)=>`<button ${tab==k?'aria-current="page"':""} onclick="setTab('${k}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${I[k]}"/></svg>${l}</button>`;
- h+=`<nav><div class="in">${nb("over","Overview")}${nb("spend","Spending")}${nb("fc","Forecast")}${nb("inv","Wealth")}${nb("acc","Accounts")}</div></nav>`;
+ h+=`<nav><div class="in">${nb("over","Overview")}${nb("spend","Money")}${nb("fc","Forecast")}${nb("inv","Wealth")}${nb("acc","Accounts")}</div></nav>`;
  $("#app").innerHTML=h;document.body.classList.toggle("priv",priv);
 }
 function shift(k){let[y,m]=ym.split("-").map(Number);m+=k;if(m<1){m=12;y--}if(m>12){m=1;y++}ym=y+"-"+p2(m);render()}
 function setTab(t){tab=t;render()}
 function setBud(c,v){S.budgets[c]=Math.max(0,parseFloat(v)||0);save();render()}
 function setBal(id,v){acc(id).bal=parseFloat(v)||0;save();render()}
-function setRate(c,v){const r=parseFloat(v);if(r>0){S.rates[c]=r;S.ratesAt=ld(new Date())}save();render()}
+const perCad=c=>{const v=1/(S.rates[c]||1);return +v.toPrecision(v>=100?7:5)};
+function setRate(c,v){const r=parseFloat(v);if(r>0){S.rates[c]=1/r;S.ratesAt=ld(new Date())}save();render()}
 function setPrice(id,v){const x=S.inv.find(i=>i.id==id);if(x)x.price=Math.max(0,parseFloat(v)||0);save();render()}
 function delInv(id){S.inv=S.inv.filter(i=>i.id!=id);save();render()}
 const MK=[["TSX","Canada (TSX)"],["TSXV","Canada (TSX-V)"],["US","US"]];
@@ -657,40 +744,40 @@ function addInv(){const s=$("#is").value.trim(),q=parseFloat($("#iq").value),b=p
 function addAcct(){const n=$("#an").value.trim();if(!n){note="Give the account a name.";return render()}
  S.accts.push({id:Date.now(),name:n,cur:$("#acu").value,type:$("#aty").value,bal:parseFloat($("#ab").value)||0,limit:parseFloat($("#al").value)||0});save();render()}
 function delAcct(id){if(S.accts.length<2)note="Keep at least one account.";else if(S.tx.some(t=>t.acct==id))note="Delete this account's expenses first.";else{S.accts=S.accts.filter(a=>a.id!=id);save()}render()}
-function openSheet(){
+function openSheet(k){
  $("#ac").innerHTML=S.accts.map(a=>`<option value="${a.id}">${esc(a.name)} (${a.cur})</option>`).join("");
- $("#c").innerHTML=Object.keys(BUD).map(c=>`<option>${c}</option>`).join("");
- $("#a").value="";$("#n").value="";$("#r").value="";$("#d").value=ld(new Date());touched=false;rcpt=null;$("#sm").textContent="";$("#rf").value="";
+ $("#a").value="";$("#n").value="";setKind(k=="i"?"i":"x");$("#d").value=ld(new Date());touched=false;rcpt=null;$("#sm").textContent="";$("#rf").value="";
  $("#sheet").classList.add("open");setTimeout(()=>$("#a").focus(),50)}
 function closeSheet(){$("#sheet").classList.remove("open")}
-function addTx(){let amt=parseFloat($("#a").value);
+function addTx(){if(KIND=="i")return addInc();let amt=parseFloat($("#a").value);
  if(!(amt>0)){$("#a").style.borderColor="var(--red)";return $("#a").focus()}
  $("#a").style.borderColor="";
  const date=$("#d").value||ld(new Date()),a=acc($("#ac").value);if(rcpt&&rcpt.cur&&rcpt.cur!=a.cur&&Math.abs(rcpt.amt-amt)<.005)amt=+(amt*(S.rates[rcpt.cur]||1)/(S.rates[a.cur]||1)).toFixed(2);
  const k=date.slice(0,7),b4=alertList(k).map(x=>x[1]);S.tx.push({id:Date.now(),amt,acct:a.id,cat:$("#c").value,note:$("#n").value.trim(),date,rec:$("#r").value});
- a.bal+=a.type=="credit"?amt:-amt;save();const nw=alertList(k).find(x=>!b4.includes(x[1]));if(nw)note="Alert: "+nw[1];ym=k;tab="spend";closeSheet();render()}
+ a.bal+=a.type=="credit"?amt:-amt;save();ssub="sp";const nw=alertList(k).find(x=>!b4.includes(x[1]));if(nw)note="Alert: "+nw[1];ym=k;tab="spend";closeSheet();render()}
 function delTx(id){const t=S.tx.find(t=>t.id==id);if(!t)return;const a=acc(t.acct);a.bal+=a.type=="credit"?-t.amt:t.amt;S.tx=S.tx.filter(x=>x.id!=id);save();render()}
 const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
 async function exp(kind){if(!DL&&HOST)return;let rows;
  if(kind=="tx")rows=[["Date","Type","Frequency","Category","Group","Note","Account","Currency","Amount","Amount CAD"],...S.tx.map(t=>{const a=acc(t.acct);return[t.date,t.rec?"Recurring":"One-time",t.rec,t.cat,GRP[t.cat],t.note.replace(/^[=+\-@]/,"'$&"),a.name,a.cur,t.amt.toFixed(2),cv(t.amt,a.cur).toFixed(2)]})];
+ else if(kind=="inc")rows=[["Date","Type","Pay schedule","Category","Note","Account","Currency","Amount","Amount CAD","Monthly equivalent CAD"],...S.inc.map(t=>{const a=acc(t.acct);return[t.date,t.rec?"Regular":"One-time",t.rec?FL[t.rec]:"",t.cat,t.note.replace(/^[=+\-@]/,"'$&"),a.name,a.cur,t.amt.toFixed(2),cv(t.amt,a.cur).toFixed(2),t.rec?(cv(t.amt,a.cur)*F[t.rec]).toFixed(2):""]})];
  else if(kind=="ast")rows=[["Name","Type","Currency","Purchase price","Purchase date","Current value","Running cost","Per","Cost per day CAD"],...S.assets.map(a=>[a.name.replace(/^[=+\-@]/,"'$&"),a.kind,a.cur,a.price,a.date,a.value,a.run,a.per,astCalc(a).perDay.toFixed(2)])];else rows=[["Symbol","Units","Cost per unit","Current price","Currency","Value","Gain or loss","Gain or loss %"],...S.inv.map(x=>{const v=x.qty*x.price,g=v-x.qty*x.cost;return[x.sym,x.qty,x.cost,x.price,x.cur,v.toFixed(2),g.toFixed(2),x.cost&&x.qty?(g/(x.qty*x.cost)*100).toFixed(1)+"%":""]})];
  const csv=rows.map(r=>r.map(q).join(",")).join("\r\n");
- const fn=({tx:"spending-",ast:"assets-"}[kind]||"investments-")+ld(new Date())+".csv";if(!DL)return saveLocal(fn,new Blob([csv],{type:"text/csv"}));
- try{await DL.save({filename:({tx:"spending-",ast:"assets-"}[kind]||"investments-")+ld(new Date())+".csv",data:new Blob([csv],{type:"text/csv"})})}catch(e){if(!e||e.code!="declined"){note="The download didn't save. Try again.";render()}}}
-$("#n").addEventListener("input",e=>{if(touched)return;const g=guess(e.target.value);if(g)$("#c").value=g});
-$("#c").addEventListener("change",()=>touched=true);
+ const fn=({tx:"spending-",ast:"assets-",inc:"earnings-"}[kind]||"investments-")+ld(new Date())+".csv";if(!DL)return saveLocal(fn,new Blob([csv],{type:"text/csv"}));
+ try{await DL.save({filename:({tx:"spending-",ast:"assets-",inc:"earnings-"}[kind]||"investments-")+ld(new Date())+".csv",data:new Blob([csv],{type:"text/csv"})})}catch(e){if(!e||e.code!="declined"){note="The download didn't save. Try again.";render()}}}
+$("#n").addEventListener("input",e=>{if(touched||KIND=="i")return;const g=guess(e.target.value);if(g)$("#c").value=g});
+$("#c").addEventListener("change",()=>{touched=true;if(KIND=="i"&&!rTouched)$("#r").value=$("#c").value=="Salary"?"biweekly":""});$("#r").addEventListener("change",()=>rTouched=true);
 $("#sheet").addEventListener("click",e=>{if(e.target.id=="sheet")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key=="Enter"&&locked)unlock()});
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&PIN()){locked=true;render()}});
-$("#rf").addEventListener("change",e=>scanReceipt(e.target.files[0]));if(!HOST)$("#scanb").hidden=false;
-$("#ac").addEventListener("change",()=>{if(rcpt&&rcpt.cur){const a=acc($("#ac").value);$("#sm").textContent=rcpt.cur!=a.cur?`This receipt is in ${rcpt.cur}. It will be saved in ${a.cur} at your saved rate.`:""}});
+$("#rf").addEventListener("change",e=>scanReceipt(e.target.files[0]));if(!HOST)SCANOK=true;
+$("#ac").addEventListener("change",()=>{if(rcpt&&rcpt.cur){const a=acc($("#ac").value);$("#sm").textContent=rcpt.cur!=a.cur?`This receipt is in ${rcpt.cur}. It will be converted to ${a.cur} at your saved rate (1 CAD = ${perCad(rcpt.cur)} ${rcpt.cur}).`:""}});
 load();locked=!!PIN();render();
 $("#cq").addEventListener("keydown",e=>{if(e.key=="Enter")askAI()});
 setTimeout(()=>brief(),1200);document.addEventListener("visibilitychange",()=>{if(!document.hidden)brief()});
 document.addEventListener("pointermove",scrub);if(!HOST&&S.tdKey&&!locked)refreshLive();document.addEventListener("pointerdown",scrub);
 try{window.claude&&claude.use("mcp").then(m=>{if(!m)return;MCP=m;render();refreshLive()}).catch(()=>{})}catch(e){}
 setInterval(()=>{const t=document.activeElement&&document.activeElement.tagName;if(liveOk()&&!document.hidden&&!locked&&!/INPUT|SELECT/.test(t||"")&&!$("#sheet").classList.contains("open"))refreshLive()},9e5);
-try{window.claude&&claude.use("sample").then(async x=>{if(!x)return;SAMT=x;render();const l=await x.limits().catch(()=>null);if(l&&l.images){SAM=x;$("#scanb").hidden=false}}).catch(()=>{})}catch(e){}
+try{window.claude&&claude.use("sample").then(async x=>{if(!x)return;SAMT=x;render();const l=await x.limits().catch(()=>null);if(l&&l.images){SAM=x;SCANOK=true}}).catch(()=>{})}catch(e){}
 try{window.claude&&claude.use("downloads").then(d=>{DL=d;if(d)render()}).catch(()=>{})}catch(e){}
 </script><script>if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))</script>
 </body></html>
