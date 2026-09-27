@@ -11,8 +11,10 @@ Updating: upload the new index.html and sw.js to your GitHub repository. The ins
 Optional free keys (Accounts tab):
 - Twelve Data (twelvedata.com): live exchange rates and US stock prices.
 - Alpha Vantage (alphavantage.co): Canadian TSX stock and ETF prices, 25 updates a day.
-- Groq (console.groq.com, no credit card): general questions, today's rates and news, the morning brief, and price checks for anything the others miss.
+- Groq (console.groq.com, no credit card): general questions, today's rates and news, and price checks for anything the others miss.
 
 The assistant answers questions about your own money on your phone, with no key needed.
 Receipt scanning reads receipts on your phone. The reader downloads once the first time you scan.
 To move data from another copy of the app, tap "Back up data" there (Accounts tab), then "Restore from backup" here.
+
+Language: English, French or Simplified Chinese. Change it on the Accounts tab, under Language. The app starts in your iPhone's language if it's one of these.
