@@ -18,3 +18,5 @@ Receipt scanning reads receipts on your phone. The reader downloads once the fir
 To move data from another copy of the app, tap "Back up data" there (Accounts tab), then "Restore from backup" here.
 
 Language: English, French or Simplified Chinese. Change it on the Accounts tab, under Language. The app starts in your iPhone's language if it's one of these.
+
+Taxes: estimates use 2026 federal and Ontario rates and are not tax advice. Check them against your pay stubs and your tax return.
