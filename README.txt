@@ -20,3 +20,5 @@ To move data from another copy of the app, tap "Back up data" there (Accounts ta
 Language: English, French or Simplified Chinese. Change it on the Accounts tab, under Language. The app starts in your iPhone's language if it's one of these.
 
 Taxes: estimates use 2026 federal and Ontario rates and are not tax advice. Check them against your pay stubs and your tax return.
+
+Reminders: on the Accounts tab, tap "Add reminders to Calendar" to get an alert every 6 hours. The alerts come from the iPhone Calendar app, so they arrive even when Pocket Budget is closed.
