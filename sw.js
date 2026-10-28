@@ -1,4 +1,4 @@
-const CACHE="pocket-budget-v23",LIB="pocket-budget-reader-v1";
+const CACHE="pocket-budget-v24",LIB="pocket-budget-reader-v1";
 const FILES=["./","./index.html","./manifest.webmanifest","./icons/icon-180.png","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-maskable-512.png","./icons/favicon.svg"];
 const LIBHOSTS=["cdn.jsdelivr.net","tessdata.projectnaptha.com"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});
@@ -10,3 +10,5 @@ self.addEventListener("fetch",e=>{
   if(r.mode==="navigate"){e.respondWith(fetch(new Request(r.url,{cache:"no-cache",redirect:"manual",credentials:"same-origin"})).then(res=>{if(res.type==="opaqueredirect")return res;if(res.ok){const c=res.clone();caches.open(CACHE).then(x=>x.put("./index.html",c))}return res}).catch(()=>caches.match("./index.html")));return}
   e.respondWith(caches.match(r).then(m=>m||fetch(r)));
 });
+self.addEventListener("notificationclick",e=>{e.notification.close();const url=new URL((e.notification.data&&e.notification.data.url)||"./?add=1",self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({type:"window",includeUncontrolled:true}).then(cs=>{for(const c of cs){if("focus"in c){c.postMessage({add:1});return c.focus()}}return self.clients.openWindow(url)}))});
